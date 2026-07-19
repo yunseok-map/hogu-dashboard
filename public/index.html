@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>호구체크®</title>
+<meta name="description" content="사기 전에 검사합시다 — 시세·유사 상품·리뷰로 호구 여부를 판별하는 로컬 도구">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23d7f53f'/%3E%3Ctext x='16' y='23' font-size='17' font-weight='900' text-anchor='middle' fill='%23131313'%3E호%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="loadbar" class="loadbar" aria-hidden="true"></div>
+
+<!-- 상단 마퀴 티커 -->
+<div class="ticker ticker-top" aria-hidden="true">
+  <div class="ticker-track">
+    <span>HOGU-CHECK® 사기 전에 검사합시다</span><i>▲</i>
+    <span>로컬 전용 · 데이터 반출 없음</span><i>▲</i>
+    <span>다나와 · 에누리 · 웹 실시간 시세</span><i>▲</i>
+    <span>오늘도 정가에 삽시다</span><i>▲</i>
+    <span>HOGU-CHECK® 사기 전에 검사합시다</span><i>▲</i>
+    <span>로컬 전용 · 데이터 반출 없음</span><i>▲</i>
+    <span>다나와 · 에누리 · 웹 실시간 시세</span><i>▲</i>
+    <span>오늘도 정가에 삽시다</span><i>▲</i>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hdr">
+    <a class="logo" href="/">호구체크<sup>®</sup></a>
+    <button id="homeBtn" class="nav-btn" type="button">기록<b id="histCount">0</b></button>
+  </header>
+
+  <!-- 의뢰 폼 -->
+  <section class="intake">
+    <div class="intake-row">
+      <div class="in-box in-q">
+        <input id="urlInput" type="text" placeholder="상품 URL 또는 상품명" spellcheck="false" autocomplete="off" aria-label="상품 URL 또는 상품명">
+      </div>
+      <div class="in-box in-p">
+        <input id="priceInput" type="text" inputmode="numeric" placeholder="내가 본 가격" autocomplete="off" aria-label="내가 본 가격">
+        <span class="in-suffix">원</span>
+      </div>
+      <button id="analyzeBtn" class="cta" type="button">검사<span class="arr">→</span></button>
+    </div>
+    <label class="deep-check" title="SSG·11번가 등 대형몰을 Chrome으로 직접 뒤집니다. 10초쯤 더 걸립니다.">
+      <input type="checkbox" id="deepChk" checked><span>메이저몰 정밀검색 <i>SSG·11번가·옥션·G마켓 (+15s)</i></span>
+    </label>
+    <div id="statusLine" class="status hidden" role="status">
+      <span class="status-bar"></span><span id="statusText">검사 중…</span>
+    </div>
+    <div id="errorBox" class="error hidden" role="alert"></div>
+  </section>
+
+  <!-- 초기 화면 -->
+  <section id="empty">
+    <h1 class="mega">이 가격,<br><em class="outline">호구</em>일까?</h1>
+    <div class="lede-row">
+      <p class="lede">링크나 상품명을 넣으면 시세 분포·유사 상품·리뷰 평판을 훑어서
+      <b>호구지수</b>를 매깁니다. 쿠팡처럼 막아둔 사이트는 Chrome을 자동으로 띄워 읽어옵니다.</p>
+      <div class="tries">
+        <span class="tries-label">견본 →</span>
+        <button class="try" data-q="갤럭시 버즈3 프로" type="button">갤럭시 버즈3 프로</button>
+        <button class="try" data-q="에어팟 프로 2세대" type="button">에어팟 프로 2</button>
+        <button class="try" data-q="스탠바이미 27인치" type="button">스탠바이미</button>
+      </div>
+    </div>
+    <div class="idx-head">
+      <span class="idx-title-big">기록<span class="outline-s">RECORDS</span></span>
+      <span id="indexCount" class="idx-count"></span>
+    </div>
+    <ol id="historyList" class="index"></ol>
+  </section>
+
+  <!-- 로딩 -->
+  <div id="skeleton" class="hidden" aria-hidden="true">
+    <div class="skel-mega"></div>
+    <div class="skel-strip"></div>
+    <div class="skel-strip w70"></div>
+    <div class="skel-strip w50"></div>
+  </div>
+
+  <!-- 결과 -->
+  <article id="result" class="hidden">
+
+    <!-- 판정 히어로 -->
+    <section class="hero">
+      <div class="hero-score">
+        <span id="verdictScore" class="big-num">0</span>
+        <span class="big-unit">/100<br>호구지수</span>
+      </div>
+      <div class="hero-side">
+        <span id="verdictLabel" class="sticker">판정</span>
+        <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
+        <div class="meter-ends"><span>개이득</span><span>호구</span></div>
+      </div>
+    </section>
+    <ol id="reasons" class="findings"></ol>
+    <div id="verdictWarnings" class="warns"></div>
+
+    <!-- 시세 마퀴 -->
+    <div class="ticker ticker-data" aria-hidden="true"><div id="priceTicker" class="ticker-track"></div></div>
+
+    <!-- 상품 + 통계 -->
+    <section class="sec">
+      <h2 class="sec-h"><i>01</i>검사 대상</h2>
+      <div class="subject">
+        <img id="pImage" class="subject-img hidden" referrerpolicy="no-referrer" alt="">
+        <div class="subject-info">
+          <a id="pTitle" class="subject-title" target="_blank" rel="noopener noreferrer"></a>
+          <div id="pPrice" class="subject-price"></div>
+          <div id="pRating" class="subject-rating"></div>
+          <div id="pMall" class="subject-mall"></div>
+          <div id="pPromos" class="promos hidden"></div>
+          <div id="pWarnings" class="warns"></div>
+        </div>
+      </div>
+      <div id="statTiles" class="blocks"></div>
+    </section>
+
+    <section class="sec">
+      <h2 class="sec-h"><i>02</i>시세 분포<span class="sec-note">점 클릭 = 판매처 이동</span></h2>
+      <div id="chartLegend" class="legend"></div>
+      <div class="chart-box"><svg id="priceChart" width="100%" height="150"></svg></div>
+    </section>
+
+    <section id="altSection" class="sec hidden">
+      <h2 class="sec-h"><i>03</i>더 싸게 사기</h2>
+      <ol id="altCards" class="alts"></ol>
+    </section>
+
+    <section class="sec">
+      <h2 class="sec-h"><i>04</i>리뷰 판독</h2>
+      <div id="reviewVerdict" class="statements"></div>
+      <div id="reviewSnippets" class="quotes"></div>
+      <div id="reviewLinks" class="tags"></div>
+    </section>
+
+    <section class="sec">
+      <h2 class="sec-h"><i>05</i>전체 목록<span id="itemCount" class="sec-note"></span></h2>
+      <div class="tbl-ctl">
+        <label class="check"><input type="checkbox" id="simFilter" checked><span>유사한 상품만</span></label>
+        <span class="sorts">
+          <button data-sort="price" class="sort active" type="button">가격순</button>
+          <button data-sort="similarity" class="sort" type="button">유사도순</button>
+          <button data-sort="rating" class="sort" type="button">평점순</button>
+        </span>
+      </div>
+      <div class="tbl-wrap">
+        <table id="itemTable">
+          <thead><tr><th>No.</th><th>품명</th><th class="num">가격</th><th class="num">내 가격 대비</th><th>평점</th><th class="num">리뷰</th><th class="num">유사도</th><th>출처</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="webSection" class="sec hidden">
+      <h2 class="sec-h"><i>06</i>참고 자료</h2>
+      <ul id="webResults" class="foot-refs"></ul>
+    </section>
+  </article>
+
+  <footer class="ftr">
+    <span>호구체크® — 참고용 로컬 도구 · 법적 효력 없음</span>
+    <span id="srcStatus"></span>
+  </footer>
+</div>
+
+<div id="tooltip" class="tooltip hidden" aria-hidden="true"></div>
+<div id="toast" class="toast hidden" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>

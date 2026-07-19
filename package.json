@@ -1,0 +1,21 @@
+{
+  "name": "hogu-dashboard",
+  "version": "1.0.0",
+  "description": "호구 방지 대시보드 — 상품 링크로 가격/유사상품/리뷰를 자동 분석",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "chrome": "node scripts/launch-chrome.mjs",
+    "probe": "node scripts/probe.mjs",
+    "search-probe": "node scripts/search-probe.mjs"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.19.2",
+    "playwright-core": "^1.61.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
