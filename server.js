@@ -2,11 +2,11 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { parseProduct, buildSearchQuery } from './lib/productParser.js';
-import { closeBrowser, cdpStatus } from './lib/browserFetch.js';
-import { searchSimilar } from './lib/searchProviders.js';
-import { judge } from './lib/verdict.js';
-import { listHistory, saveResult, getResult, deleteResult } from './lib/store.js';
+import { parseProduct, buildSearchQuery } from './src/search/productParser.js';
+import { closeBrowser, cdpStatus } from './src/crawl/browserFetch.js';
+import { searchSimilar } from './src/search/searchProviders.js';
+import { judge } from './src/verdict.js';
+import { listHistory, saveResult, getResult, deleteResult } from './src/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

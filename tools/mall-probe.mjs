@@ -1,9 +1,9 @@
 // 신규 쇼핑몰 크롤링 가능성 정찰 도구 — 몰마다 즉시 출력(행 방지), 실제 Chrome+스크롤.
 // 가격 hit 수와 상품 컨테이너 클래스를 보고 파서를 붙일지 판단한다. 원본 HTML 미출력.
-// 사용법: node scripts/mall-probe.mjs [검색어] [몰이름...]
-//   예) node scripts/mall-probe.mjs "아이폰 15 케이스" gmarket auction
+// 사용법: node tools/mall-probe.mjs [검색어] [몰이름...]
+//   예) node tools/mall-probe.mjs "아이폰 15 케이스" gmarket auction
 import * as cheerio from 'cheerio';
-import { browserFetchPage, closeBrowser } from '../lib/browserFetch.js';
+import { browserFetchPage, closeBrowser } from '../src/crawl/browserFetch.js';
 
 const args = process.argv.slice(2);
 const q = args.find((a) => /[가-힣]/.test(a) || a.includes(' ')) || '아이폰 15 케이스';

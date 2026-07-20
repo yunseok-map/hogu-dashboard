@@ -1,8 +1,8 @@
 # 검색 정밀도 스펙 (docs/SEARCH-PRECISION.md)
 
-> 유사도(`lib/searchProviders.js`의 `similarity`)가 지켜야 할 규칙과 검증 케이스.
-> 이 문서가 기준이고, `scripts/precision-test.mjs`가 이 케이스를 자동 검증한다.
-> 규칙/케이스를 바꾸면 둘 다 같이 고치고 `node scripts/precision-test.mjs`로 통과 확인.
+> 유사도(`src/search/searchProviders.js`의 `similarity`)가 지켜야 할 규칙과 검증 케이스.
+> 이 문서가 기준이고, `test/precision-test.mjs`가 이 케이스를 자동 검증한다.
+> 규칙/케이스를 바꾸면 둘 다 같이 고치고 `node test/precision-test.mjs`로 통과 확인.
 
 ## 판정 밴드 (유사도 0~1)
 

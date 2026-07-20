@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
-import { fetchPage } from './fetchPage.js';
-import { browserFetchPage } from './browserFetch.js';
+import { fetchPage } from '../crawl/fetchPage.js';
+import { browserFetchPage } from '../crawl/browserFetch.js';
 import { extractPromos, extractSpecs, STOP } from './searchProviders.js';
 
 /**

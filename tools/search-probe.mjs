@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // 토큰 절약용 검색 프로브: 검색어 하나로 3개 제공자를 돌리고 "집계 요약"만 출력한다.
-// 사용법: node scripts/search-probe.mjs <검색어> [--full]  (--full: 상위 5개 아이템 상세)
-import { searchSimilar } from '../lib/searchProviders.js';
-import { judge } from '../lib/verdict.js';
+// 사용법: node tools/search-probe.mjs <검색어> [--full]  (--full: 상위 5개 아이템 상세)
+import { searchSimilar } from '../src/search/searchProviders.js';
+import { judge } from '../src/verdict.js';
 
 const args = process.argv.slice(2);
 const full = args.includes('--full');
 const deep = args.includes('--deep');
 const query = args.filter((a) => !a.startsWith('--')).join(' ');
 if (!query) {
-  console.error('usage: node scripts/search-probe.mjs <query> [--full] [--deep]');
+  console.error('usage: node tools/search-probe.mjs <query> [--full] [--deep]');
   process.exit(1);
 }
 
@@ -31,4 +31,4 @@ const compact = {
   })),
 };
 console.log(JSON.stringify(compact, null, 1));
-if (deep) { const { closeBrowser } = await import('../lib/browserFetch.js'); await closeBrowser(); }
+if (deep) { const { closeBrowser } = await import('../src/crawl/browserFetch.js'); await closeBrowser(); }

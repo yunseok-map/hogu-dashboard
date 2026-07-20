@@ -1,6 +1,6 @@
 // 검색 정밀도 자동 검증 — docs/SEARCH-PRECISION.md의 케이스와 동기화.
-// 사용법: node scripts/precision-test.mjs   (실패 시 exit 1)
-import { similarity } from '../lib/searchProviders.js';
+// 사용법: node test/precision-test.mjs   (실패 시 exit 1)
+import { similarity } from '../src/search/searchProviders.js';
 
 // 밴드: same ≥0.55 / variant <0.45 / accessory ≤0.20 / unrelated ≤0.15
 const BAND = {

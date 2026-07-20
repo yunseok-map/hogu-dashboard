@@ -14,7 +14,6 @@
 ## 실행
 
 ```bash
-git clone https://github.com/yunseok-map/hogu-dashboard.git
 cd hogu-dashboard
 npm install
 npm start        # → http://localhost:3311
@@ -62,6 +61,6 @@ npm start        # → http://localhost:3311
 ## 개발용 프로브 (토큰 절약)
 
 ```bash
-node scripts/probe.mjs <상품URL>          # 파서 검증 — 압축 요약만 출력
-node scripts/search-probe.mjs "<검색어>"   # 검색 제공자 검증
+node tools/probe.mjs <상품URL>          # 파서 검증 — 압축 요약만 출력
+node tools/search-probe.mjs "<검색어>"   # 검색 제공자 검증
 ```

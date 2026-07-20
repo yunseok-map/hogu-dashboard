@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
-import { fetchPage, fetchJson } from './fetchPage.js';
-import { browserFetchPage } from './browserFetch.js';
+import { fetchPage, fetchJson } from '../crawl/fetchPage.js';
+import { browserFetchPage } from '../crawl/browserFetch.js';
 
 /**
  * 유사 상품 표준 형태

@@ -6,9 +6,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "chrome": "node scripts/launch-chrome.mjs",
-    "probe": "node scripts/probe.mjs",
-    "search-probe": "node scripts/search-probe.mjs"
+    "chrome": "node tools/launch-chrome.mjs",
+    "probe": "node tools/probe.mjs",
+    "search-probe": "node tools/search-probe.mjs",
+    "test": "node test/precision-test.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

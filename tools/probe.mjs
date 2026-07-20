@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // 토큰 절약용 크롤링 프로브: 상품 URL 하나를 파싱해 "압축 요약 JSON"만 출력한다.
 // 원본 HTML을 절대 출력하지 않으므로 LLM 개발 세션에서 저비용으로 파서를 검증할 수 있다.
-// 사용법: node scripts/probe.mjs <상품URL>
-import { parseProduct, buildSearchQuery } from '../lib/productParser.js';
-import { closeBrowser } from '../lib/browserFetch.js';
+// 사용법: node tools/probe.mjs <상품URL>
+import { parseProduct, buildSearchQuery } from '../src/search/productParser.js';
+import { closeBrowser } from '../src/crawl/browserFetch.js';
 
 const url = process.argv[2];
 if (!url) {
-  console.error('usage: node scripts/probe.mjs <product-url>');
+  console.error('usage: node tools/probe.mjs <product-url>');
   process.exit(1);
 }
 
