@@ -123,6 +123,7 @@ function showError(msg) {
 function renderResult(r) {
   showView('result');
   renderVerdict(r);
+  renderDeal(r);
   renderProduct(r);
   renderChart(r);
   renderAlternatives(r);
@@ -130,6 +131,30 @@ function renderResult(r) {
   renderTable(r);
   renderWeb(r);
   window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+/* ===== 이래서 이득 (최저 실구매 딜) ===== */
+function renderDeal(r) {
+  const box = $('#dealBox');
+  const d = r.verdict.dealPitch;
+  if (!d || !d.best) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const b = d.best;
+  $('#dealCard').href = b.link || '#';
+  const effEl = $('#dealEff');
+  countUp(effEl, b.effPrice, { format: (x) => Math.round(x).toLocaleString('ko-KR') + '원' });
+  $('#dealSave').innerHTML = b.savingsVsMine > 0
+    ? `내 가격보다 <b>−${won(b.savingsVsMine)}</b>`
+    : (b.savingsVsMedian > 0 ? `시세보다 <b>−${won(b.savingsVsMedian)}</b>` : '');
+  $('#dealTitle').textContent = b.title || '';
+  $('#dealPromos').innerHTML = (b.promos || []).map((t) => `<span class="promo">${esc(t)}</span>`).join('')
+    + (b.discount > 0 ? `<span class="promo promo-hot">쿠폰 −${won(b.discount)}</span>` : '');
+  $('#dealMeta').innerHTML = [
+    b.mall || b.provider,
+    b.discount > 0 ? `정가 ${won(b.price)}` : null,
+    b.rating != null ? `★${b.rating}${b.reviewCount ? ` (${b.reviewCount.toLocaleString('ko-KR')})` : ''}` : null,
+  ].filter(Boolean).join(' · ');
+  $('#dealLines').innerHTML = (d.lines || []).map((l) => `<li>${l}</li>`).join('');
 }
 
 const TIER_CLS = { great: 'tier-great', fair: 'tier-fair', meh: 'tier-meh', bad: 'tier-bad', hogu: 'tier-hogu', unknown: 'tier-unknown' };
@@ -297,15 +322,22 @@ new ResizeObserver(() => { if (currentResult && !$('#result').classList.contains
 function renderAlternatives(r) {
   const alts = r.verdict.alternatives || [];
   $('#altSection').classList.toggle('hidden', !alts.length);
-  $('#altCards').innerHTML = alts.map((a) => `
-    <li><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">
-      <span class="alt-t">${esc(a.title)}${(a.promos || []).map((t) => `<span class="promo">${esc(t)}</span>`).join('')}</span>
+  $('#altCards').innerHTML = alts.map((a) => {
+    const hasCoupon = a.discount > 0 && a.effPrice != null;
+    const priceHtml = hasCoupon
+      ? `<span class="alt-p">${won(a.effPrice)}<span class="alt-orig">${won(a.price)}</span></span>`
+      : `<span class="alt-p">${won(a.price)}</span>`;
+    const promos = (a.promos || []).map((t) => `<span class="promo">${esc(t)}</span>`).join('')
+      + (hasCoupon ? `<span class="promo promo-hot">쿠폰 −${won(a.discount)}</span>` : '');
+    return `<li><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">
+      <span class="alt-t">${esc(a.title)}${promos}</span>
       <span class="alt-meta">${esc(a.mall || a.provider)}${a.rating ? ` · ★${a.rating}` : ''}</span>
       <span class="alt-leader"></span>
-      <span class="alt-p">${won(a.price)}</span>
+      ${priceHtml}
       ${a.savings > 0 ? `<span class="alt-save">−${won(a.savings)}</span>` : ''}
       <span class="alt-go">→</span>
-    </a></li>`).join('');
+    </a></li>`;
+  }).join('');
 }
 
 /* ===== 리뷰 소견 / 참고 자료 ===== */
