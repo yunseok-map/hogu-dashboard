@@ -9,18 +9,22 @@
 /* ---------- 토큰 ---------- */
 :root {
   color-scheme: light;
-  --paper: #f2efe6;
-  --paper-2: #e9e5d8;
-  --ink: #141412;
-  --ink-2: #4c4a42;
-  --faint: #8f8b7c;
-  --line: #141412;
-  --line-soft: rgba(20, 20, 18, 0.16);
-  --blue: #2337ff;
-  --lime: #d7f53f;
-  --lime-deep: #b5d61a;
-  --t-great: #d7f53f;  --t-meh: #ffd43a;  --t-bad: #ff8a3d;  --t-hogu: #ff4b3e;  --t-none: #dcd8ca;
-  --good-txt: #3f7d00; --hogu-txt: #d02c20;
+  /* 네온 시트러스: 옅은 라일락 바탕 · 바이올렛 메인 · 옐로우 포인트 */
+  --paper: #f6f5ff;
+  --paper-2: #eceaff;
+  --grid-dot: rgba(45, 30, 90, 0.12);
+  --grid-line: rgba(45, 30, 90, 0.05);
+  --ink: #17141f;
+  --ink-2: #4b4658;
+  --faint: #8b869c;
+  --line: #17141f;
+  --line-soft: rgba(23, 20, 31, 0.16);
+  --blue: #6d3bff;          /* 메인(바이올렛) — 버튼/링크/포커스 */
+  --blue-deep: #5a2fe0;
+  --lime: #ffd43a;          /* 포인트(옐로우) — 하이라이트/딜/배지 */
+  --lime-deep: #ffc400;
+  --t-great: #b6f13a;  --t-meh: #ffd43a;  --t-bad: #ff9a3d;  --t-hogu: #ff4b5e;  --t-none: #ddd9ea;
+  --good-txt: #3f7d00; --hogu-txt: #d0203a;
   --shadow: 4px 4px 0 var(--ink);
   --shadow-lg: 7px 7px 0 var(--ink);
   --ease: cubic-bezier(.22, .68, .28, 1);
@@ -29,10 +33,20 @@
 
 /* ---------- 베이스 ---------- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: var(--paper); }
+/* 배경: 제도용지풍 — 굵은 격자(120px) + 잔격자(24px) + 교차점 도트. 브루탈리즘 결의 의도된 텍스처.
+   (루트 배경은 캔버스로 전파되므로 html에 직접 얹고 body는 투명) */
+html {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(var(--grid-dot) 1.4px, transparent 1.6px),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+}
 body {
   font-family: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
-  background: var(--paper); color: var(--ink); line-height: 1.6;
+  background: transparent; color: var(--ink); line-height: 1.6;
   -webkit-font-smoothing: antialiased; overflow-x: clip;
 }
 a { color: inherit; }
@@ -109,12 +123,12 @@ button { font-family: inherit; cursor: pointer; color: inherit; background: none
 .cta {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 10px;
   font-size: 17px; font-weight: 900; letter-spacing: -0.3px;
-  background: var(--lime); border: 2px solid var(--line); padding: 0 28px;
+  background: var(--blue); color: #fff; border: 2px solid var(--line); padding: 0 28px;
   box-shadow: var(--shadow);
   transition: transform .14s var(--snap), box-shadow .14s, background .14s;
 }
 .cta .arr { font-weight: 900; transition: transform .2s var(--snap); }
-.cta:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-lg); background: #e3ff58; }
+.cta:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-lg); background: var(--blue-deep); }
 .cta:hover .arr { transform: translateX(5px); }
 .cta:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
 .cta:disabled { opacity: .55; cursor: wait; transform: none; box-shadow: var(--shadow); }
@@ -256,33 +270,57 @@ button { font-family: inherit; cursor: pointer; color: inherit; background: none
 .warns { font-size: 12px; font-weight: 600; color: var(--t-bad); margin-top: 8px; display: grid; gap: 2px; }
 .warns div::before { content: "! "; font-weight: 900; }
 
-/* ===== 이래서 이득 (최저 실구매 딜) ===== */
+/* ===== 이래서 이득 (상황별: better-deal / already-best) ===== */
 .deal { margin: 26px 0 6px; }
-.deal-head { display: inline-block; font-size: 15px; font-weight: 900; letter-spacing: -0.3px; background: var(--ink); color: var(--lime); padding: 5px 14px; margin-bottom: -2px; position: relative; z-index: 1; }
+.deal-head { display: inline-block; font-size: 15px; font-weight: 900; letter-spacing: -0.3px; padding: 5px 14px; margin-bottom: -2px; position: relative; z-index: 1; }
+.deal-head-hot { background: var(--ink); color: var(--lime); }
+.deal-head-ok { background: var(--ink); color: #fff; }
+
 .deal-card {
-  display: block; text-decoration: none; color: inherit;
-  border: 3px solid var(--line); background: var(--lime); padding: 18px 20px;
-  box-shadow: var(--shadow-lg);
+  display: flex; align-items: stretch; justify-content: space-between; gap: 18px;
+  text-decoration: none; color: inherit;
+  border: 3px solid var(--line); padding: 18px 20px; box-shadow: var(--shadow-lg);
   transition: transform .15s var(--snap), box-shadow .15s;
 }
-.deal-card:hover { transform: translate(-3px, -3px); box-shadow: 10px 10px 0 var(--ink); }
-.deal-card:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
-.deal-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-.deal-eff { display: flex; flex-direction: column; }
-.deal-eff-num { font-size: clamp(30px, 5vw, 46px); font-weight: 900; letter-spacing: -1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
-.deal-eff-lbl { font-size: 11.5px; font-weight: 800; letter-spacing: .5px; color: var(--ink-2); margin-top: 3px; }
-.deal-save { font-size: 15px; font-weight: 900; background: var(--ink); color: var(--lime); padding: 5px 12px; white-space: nowrap; }
-.deal-save b { color: #fff; }
-.deal-title { font-size: 14px; font-weight: 700; margin-top: 12px; line-height: 1.45; }
+.deal-card.better { background: var(--lime); }
+.deal-card.best { background: #fff; cursor: default; }
+a.deal-card:hover { transform: translate(-3px, -3px); box-shadow: 10px 10px 0 var(--ink); }
+a.deal-card:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+
+.deal-l { min-width: 0; display: flex; flex-direction: column; }
+.deal-r { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 12px; text-align: right; }
+.deal-kicker { font-size: 12px; font-weight: 800; letter-spacing: .3px; color: var(--ink-2); }
+.deal-eff-num { font-size: clamp(30px, 5vw, 46px); font-weight: 900; letter-spacing: -1.5px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.deal-eff-lbl { font-size: 11.5px; font-weight: 800; letter-spacing: .3px; color: var(--ink-2); margin-top: 4px; }
+.deal-title { font-size: 13.5px; font-weight: 700; margin-top: 12px; line-height: 1.45; }
 .deal .promos { margin-top: 8px; }
-.deal-card .promo { background: #fff; }
+.deal-card.better .promo { background: #fff; }
 .promo-hot { background: var(--ink) !important; color: var(--lime) !important; }
 .deal-meta { font-size: 12px; font-weight: 700; color: var(--ink-2); margin-top: 8px; }
-.deal-go { display: inline-block; margin-top: 14px; font-size: 14px; font-weight: 900; border-bottom: 3px solid var(--ink); padding-bottom: 1px; }
+
+/* 우측: 절약 배지 + CTA (better-deal) */
+.deal-save { background: var(--ink); color: #fff; padding: 8px 13px; text-align: center; white-space: nowrap; line-height: 1.15; }
+.deal-save-lbl { display: block; font-size: 11px; font-weight: 700; color: var(--lime); }
+.deal-save b { font-size: 18px; font-weight: 900; }
+.deal-go { display: inline-block; font-size: 14px; font-weight: 900; border-bottom: 3px solid var(--ink); padding-bottom: 1px; align-self: flex-end; }
+.deal-card.best .deal-go { margin-top: 12px; align-self: flex-start; }
+
+/* 우측: 시세 최저 참고 (already-best) */
+.deal-ref { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 11.5px; font-weight: 700; color: var(--faint); }
+.deal-ref b { font-size: 20px; font-weight: 900; color: var(--ink-2); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+
 .deal-lines { list-style: none; margin-top: 14px; display: grid; gap: 7px; font-size: 13.5px; color: var(--ink-2); }
 .deal-lines li { padding-left: 4px; }
 .deal-lines b { color: var(--ink); background: linear-gradient(transparent 60%, var(--lime) 60%); padding: 0 2px; }
 .alt-orig { font-family: var(--sans); font-size: 11px; font-weight: 500; color: var(--faint); text-decoration: line-through; margin-left: 6px; letter-spacing: 0; }
+
+@media (max-width: 680px) {
+  .deal-card { flex-direction: column; gap: 14px; }
+  .deal-r { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; text-align: left; }
+  .deal-save { flex: 1; }
+  .deal-ref { align-items: flex-start; }
+  .deal-card.best .deal-r { justify-content: flex-start; }
+}
 
 /* ---------- 섹션 공통 ---------- */
 .sec { padding: 30px 0 34px; border-top: 2px solid var(--line); margin-top: 34px; }
@@ -332,7 +370,7 @@ button { font-family: inherit; cursor: pointer; color: inherit; background: none
 .block .k { display: block; font-size: 11.5px; font-weight: 800; letter-spacing: .8px; color: var(--faint); }
 .block .v { display: block; font-size: 20px; font-weight: 900; letter-spacing: -0.5px; margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .block.hl { background: var(--lime); }
-.block.hl:hover { background: #e3ff58; }
+.block.hl:hover { background: var(--lime-deep); }
 .block.hl .k { color: var(--ink-2); }
 
 /* ---------- 차트 ---------- */

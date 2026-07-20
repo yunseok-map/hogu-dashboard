@@ -133,33 +133,72 @@ function renderResult(r) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-/* ===== 이래서 이득 (최저 실구매 딜) ===== */
+/* ===== 이래서 이득 — 상황별 렌더 ===== */
 function renderDeal(r) {
   const box = $('#dealBox');
   const d = r.verdict.dealPitch;
-  if (!d || !d.best) { box.classList.add('hidden'); return; }
+  if (!d) { box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
-  const b = d.best;
-  $('#dealCard').href = b.link || '#';
-  const effEl = $('#dealEff');
-  countUp(effEl, b.effPrice, { format: (x) => Math.round(x).toLocaleString('ko-KR') + '원' });
-  $('#dealSave').innerHTML = b.savingsVsMine > 0
-    ? `내 가격보다 <b>−${won(b.savingsVsMine)}</b>`
-    : (b.savingsVsMedian > 0 ? `시세보다 <b>−${won(b.savingsVsMedian)}</b>` : '');
-  $('#dealTitle').textContent = b.title || '';
-  $('#dealPromos').innerHTML = (b.promos || []).map((t) => `<span class="promo">${esc(t)}</span>`).join('')
+  const linesHtml = (d.lines || []).map((l) => `<li>${l}</li>`).join('');
+
+  if (d.kind === 'already-best') {
+    // 내 가격이 이미 최저 — "저걸 사라"는 오해 방지: 내 가격을 확정 프레임으로
+    const cta = d.productUrl
+      ? `<a class="deal-go" href="${esc(d.productUrl)}" target="_blank" rel="noopener noreferrer">이 상품 보러 가기 →</a>` : '';
+    box.className = 'deal deal-ok';
+    box.innerHTML = `
+      <div class="deal-head deal-head-ok">✅ 지금이 최저가</div>
+      <div class="deal-card best">
+        <div class="deal-l">
+          <span class="deal-kicker">지금 보고 계신 가격</span>
+          <span id="dealEff" class="deal-eff-num">${won(d.myPrice)}</span>
+          <span class="deal-eff-lbl">이미 시세보다 쌉니다 · 바로 사도 좋아요</span>
+          ${cta}
+        </div>
+        <div class="deal-r">
+          <div class="deal-ref"><span>시세 최저</span><b>${won(d.marketLow?.price)}</b><span>${esc(d.marketLow?.mall || d.marketLow?.provider || '')}</span></div>
+        </div>
+      </div>
+      <ul class="deal-lines">${linesHtml}</ul>`;
+    countUp($('#dealEff'), d.myPrice, { format: (x) => Math.round(x).toLocaleString('ko-KR') + '원' });
+    return;
+  }
+
+  // better-deal — 더 싼 판매처로 사러 가기
+  const b = d.best || {};
+  const saveHtml = b.savingsVsMine > 0
+    ? `<span class="deal-save-lbl">내 가격보다</span><b>−${won(b.savingsVsMine)}</b>`
+    : (b.savingsVsMedian > 0 ? `<span class="deal-save-lbl">시세보다</span><b>−${won(b.savingsVsMedian)}</b>` : '');
+  const promos = (b.promos || []).map((t) => `<span class="promo">${esc(t)}</span>`).join('')
     + (b.discount > 0 ? `<span class="promo promo-hot">쿠폰 −${won(b.discount)}</span>` : '');
-  $('#dealMeta').innerHTML = [
-    b.mall || b.provider,
+  const meta = [
     b.discount > 0 ? `정가 ${won(b.price)}` : null,
     b.rating != null ? `★${b.rating}${b.reviewCount ? ` (${b.reviewCount.toLocaleString('ko-KR')})` : ''}` : null,
   ].filter(Boolean).join(' · ');
-  $('#dealLines').innerHTML = (d.lines || []).map((l) => `<li>${l}</li>`).join('');
+  box.className = 'deal';
+  box.innerHTML = `
+    <div class="deal-head deal-head-hot">🔥 여기서 사면 더 쌉니다</div>
+    <a class="deal-card better" href="${esc(b.link || '#')}" target="_blank" rel="noopener noreferrer">
+      <div class="deal-l">
+        <span class="deal-kicker">최저 실구매처 · ${esc(b.mall || b.provider || '')}</span>
+        <span id="dealEff" class="deal-eff-num">${won(b.effPrice)}</span>
+        <span class="deal-eff-lbl">쿠폰 적용 실구매가</span>
+        <div class="deal-title">${esc(b.title || '')}</div>
+        <div class="promos">${promos}</div>
+        ${meta ? `<div class="deal-meta">${esc(meta)}</div>` : ''}
+      </div>
+      <div class="deal-r">
+        ${saveHtml ? `<div class="deal-save">${saveHtml}</div>` : ''}
+        <span class="deal-go">사러 가기 →</span>
+      </div>
+    </a>
+    <ul class="deal-lines">${linesHtml}</ul>`;
+  countUp($('#dealEff'), b.effPrice, { format: (x) => Math.round(x).toLocaleString('ko-KR') + '원' });
 }
 
 const TIER_CLS = { great: 'tier-great', fair: 'tier-fair', meh: 'tier-meh', bad: 'tier-bad', hogu: 'tier-hogu', unknown: 'tier-unknown' };
 
-const TIER_FILL = { great: '#d7f53f', fair: '#d7f53f', meh: '#ffd43a', bad: '#ff8a3d', hogu: '#ff4b3e', unknown: '#dcd8ca' };
+const TIER_FILL = { great: '#b6f13a', fair: '#b6f13a', meh: '#ffd43a', bad: '#ff9a3d', hogu: '#ff4b5e', unknown: '#ddd9ea' };
 
 function renderVerdict(r) {
   const v = r.verdict;
