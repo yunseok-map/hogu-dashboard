@@ -1,4 +1,4 @@
-/* 호구체크 v4 "종이 감정서" 프런트엔드 — 구조/규칙은 docs/DESIGN.md 참고 */
+/* 호구체크 v6 "일렉트릭 리소" 프런트엔드 — 구조/규칙은 docs/DESIGN.md 참고 */
 'use strict';
 
 const $ = (s) => document.querySelector(s);
@@ -10,6 +10,7 @@ const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let currentResult = null;
 let sortKey = 'price';
 let es = null;
+let historyPts = [];
 
 /* ===== 유틸 ===== */
 function toast(msg, ms = 2600) {
@@ -32,6 +33,9 @@ function relTime(ts) {
 
 const fmtDate = (d) =>
   `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}.`;
+
+/** 'YYYY-MM-DD' → 'MM.DD' (가격 추이 축 라벨) */
+const fmtMD = (s) => { const p = String(s).split('-'); return p.length === 3 ? `${p[1]}.${p[2]}` : String(s); };
 
 /** 숫자 카운트업 */
 function countUp(el, to, { dur = 700, format = (v) => Math.round(v).toLocaleString('ko-KR') } = {}) {
@@ -126,10 +130,12 @@ function renderResult(r) {
   renderDeal(r);
   renderProduct(r);
   renderChart(r);
+  renderPriceHistory(r);
   renderAlternatives(r);
   renderReviews(r);
   renderTable(r);
   renderWeb(r);
+  setWatchBtn(!!r.watched);
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
@@ -147,7 +153,7 @@ function renderDeal(r) {
       ? `<a class="deal-go" href="${esc(d.productUrl)}" target="_blank" rel="noopener noreferrer">이 상품 보러 가기 →</a>` : '';
     box.className = 'deal deal-ok';
     box.innerHTML = `
-      <div class="deal-head deal-head-ok">✅ 지금이 최저가</div>
+      <div class="deal-head deal-head-ok">지금이 최저가</div>
       <div class="deal-card best">
         <div class="deal-l">
           <span class="deal-kicker">지금 보고 계신 가격</span>
@@ -177,7 +183,7 @@ function renderDeal(r) {
   ].filter(Boolean).join(' · ');
   box.className = 'deal';
   box.innerHTML = `
-    <div class="deal-head deal-head-hot">🔥 여기서 사면 더 쌉니다</div>
+    <div class="deal-head deal-head-hot">여기서 사면 더 쌉니다</div>
     <a class="deal-card better" href="${esc(b.link || '#')}" target="_blank" rel="noopener noreferrer">
       <div class="deal-l">
         <span class="deal-kicker">최저 실구매처 · ${esc(b.mall || b.provider || '')}</span>
@@ -198,7 +204,7 @@ function renderDeal(r) {
 
 const TIER_CLS = { great: 'tier-great', fair: 'tier-fair', meh: 'tier-meh', bad: 'tier-bad', hogu: 'tier-hogu', unknown: 'tier-unknown' };
 
-const TIER_FILL = { great: '#b6f13a', fair: '#b6f13a', meh: '#ffd43a', bad: '#ff9a3d', hogu: '#ff4b5e', unknown: '#ddd9ea' };
+const TIER_FILL = { great: '#46e07d', fair: '#46e07d', meh: '#ffc22e', bad: '#ff8a3c', hogu: '#ff3b52', unknown: '#d8d5e0' };
 
 function renderVerdict(r) {
   const v = r.verdict;
@@ -354,8 +360,79 @@ function niceTicks(min, max, count) {
   for (let t = Math.ceil(min / s) * s; t <= max; t += s) out.push(t);
   return out;
 }
-new ResizeObserver(() => { if (currentResult && !$('#result').classList.contains('hidden')) renderChart(currentResult); })
-  .observe(document.body);
+/* ===== 가격 추이 (일자별 시계열) ===== */
+function renderPriceHistory(r) {
+  const block = $('#historyBlock');
+  const apply = (points) => {
+    historyPts = Array.isArray(points) ? points : [];
+    if (historyPts.length < 2) { block.classList.add('hidden'); return; }
+    block.classList.remove('hidden');
+    const hasMy = historyPts.some((p) => p.myPrice != null);
+    $('#historyLegend').innerHTML =
+      `<span class="li"><span class="hl-med"></span>중앙값</span>` +
+      (hasMy ? `<span class="li"><span class="hl-my"></span>내 가격</span>` : '') +
+      `<span class="li"><span class="hl-band"></span>최저–최고</span>`;
+    $('#historyNote').textContent = `${historyPts.length}개 시점 · ${fmtMD(historyPts[0].date)} ~ ${fmtMD(historyPts[historyPts.length - 1].date)}`;
+    drawHistoryChart(historyPts);
+  };
+  apply(r.priceHistory || []);
+  // 저장된(오래된) 결과 재오픈 시 최신 시계열로 갱신
+  if (r.priceKey) {
+    fetch('/api/price-history/' + encodeURIComponent(r.priceKey))
+      .then((x) => x.json()).then((d) => { if (d && Array.isArray(d.points)) apply(d.points); })
+      .catch(() => {});
+  }
+}
+
+function drawHistoryChart(points) {
+  const svg = $('#historyChart');
+  const box = svg.parentElement;
+  const W = Math.max(480, box.clientWidth || 700), H = 150;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const padL = 14, padR = 44, padT = 14, padB = 34;
+  const vals = [];
+  points.forEach((p) => [p.min, p.median, p.max, p.myPrice].forEach((v) => { if (v != null) vals.push(v); }));
+  if (vals.length < 2) { svg.innerHTML = ''; return; }
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (lo === hi) { lo *= 0.98; hi *= 1.02; }
+  const n = points.length;
+  const x = (i) => padL + (n === 1 ? 0 : (i / (n - 1)) * (W - padL - padR));
+  const y = (v) => (H - padB) - ((v - lo) / (hi - lo)) * (H - padT - padB);
+
+  let el = '';
+  for (const t of niceTicks(lo, hi, 4)) {
+    if (t < lo || t > hi) continue;
+    el += `<line x1="${padL}" y1="${y(t).toFixed(1)}" x2="${W - padR}" y2="${y(t).toFixed(1)}" stroke="var(--hair)" stroke-dasharray="2 3"/>
+           <text x="${W - padR + 4}" y="${y(t).toFixed(1)}" font-size="10" fill="var(--faint)" dominant-baseline="middle">${compactWon(t)}</text>`;
+  }
+  // 최저–최고 밴드
+  if (points.some((p) => p.min != null && p.max != null)) {
+    const top = points.map((p, i) => `${x(i).toFixed(1)},${y(p.max ?? p.median ?? p.min).toFixed(1)}`);
+    const bot = points.map((p, i) => `${x(i).toFixed(1)},${y(p.min ?? p.median ?? p.max).toFixed(1)}`).reverse();
+    el += `<polygon points="${top.concat(bot).join(' ')}" fill="var(--lime)" fill-opacity="0.2" stroke="none"/>`;
+  }
+  const line = (sel, color, dash) => {
+    const pts = points.map((p, i) => (p[sel] != null ? `${x(i).toFixed(1)},${y(p[sel]).toFixed(1)}` : null)).filter(Boolean);
+    return pts.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="${dash ? 2 : 2.5}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>` : '';
+  };
+  el += line('median', 'var(--blue)', null);
+  el += line('myPrice', 'var(--t-hogu)', '6 4');
+
+  const labelEvery = Math.max(1, Math.ceil(n / 6));
+  points.forEach((p, i) => {
+    if (p.median != null) el += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.median).toFixed(1)}" r="3.5" fill="var(--blue)" stroke="var(--ink)" stroke-width="1.3"/>`;
+    if (p.myPrice != null) { const mx = x(i), my = y(p.myPrice); el += `<rect x="${(mx - 3).toFixed(1)}" y="${(my - 3).toFixed(1)}" width="6" height="6" fill="var(--t-hogu)" stroke="var(--ink)" stroke-width="1.2" transform="rotate(45 ${mx.toFixed(1)} ${my.toFixed(1)})"/>`; }
+    if (i % labelEvery === 0 || i === n - 1) el += `<text x="${x(i).toFixed(1)}" y="${H - padB + 16}" text-anchor="middle" font-size="10" fill="var(--faint)">${fmtMD(p.date)}</text>`;
+  });
+  svg.innerHTML = el;
+}
+
+new ResizeObserver(() => {
+  if (currentResult && !$('#result').classList.contains('hidden')) {
+    renderChart(currentResult);
+    if (historyPts.length >= 2) drawHistoryChart(historyPts);
+  }
+}).observe(document.body);
 
 /* ===== 더 싼 구매처 (원장) ===== */
 function renderAlternatives(r) {
@@ -480,6 +557,74 @@ async function openResult(id) {
   }
 }
 
+/* ===== 핫딜 레이더 (2트랙: 검색 기반 / 키워드 특가) ===== */
+async function loadDeals() {
+  const payload = await fetch('/api/deals').then((r) => r.json()).catch(() => null);
+  renderRadar(payload);
+}
+function dealCardHtml(d) {
+  const disc = d.discountPct ? `<span class="rd-disc">-${d.discountPct}%</span>` : '';
+  const price = d.price != null ? `<span class="rd-price">${won(d.price)}</span>` : '';
+  const orig = (d.origPrice != null && d.origPrice !== d.price) ? `<span class="rd-orig">${won(d.origPrice)}</span>` : '';
+  const save = d.savings > 0 ? `<span class="rd-save">-${won(d.savings)}</span>` : '';
+  const srcCls = d.source === '공홈' ? 'rd-src rd-src-mall' : d.source === '키워드' ? 'rd-src rd-src-kw' : 'rd-src';
+  const srcTxt = d.source === '공홈' ? '공식몰' : d.source === '키워드' ? esc(d.keyword || '키워드') : '포착';
+  const badges = (d.badges || []).slice(0, 2).map((b) => `<span class="promo">${esc(b)}</span>`).join('');
+  const inner = `<span class="rd-top"><span class="${srcCls}">${srcTxt}</span><span class="rd-mall">${esc(d.mall || '')}</span>${disc}</span>
+    <span class="rd-title">${esc(d.title || '')}</span>
+    <span class="rd-bottom">${price}${orig}${save}</span>
+    ${badges ? `<span class="rd-badges">${badges}</span>` : ''}`;
+  return d.url
+    ? `<li><a class="rd-card" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${inner}</a></li>`
+    : `<li><span class="rd-card">${inner}</span></li>`;
+}
+function renderRadar(payload) {
+  const items = (payload && payload.items) || [];
+  const search = items.filter((d) => d.source !== '키워드' && d.source !== '공홈');
+  const crawl = items.filter((d) => d.source === '키워드' || d.source === '공홈');
+  $('#radarList').innerHTML = search.map(dealCardHtml).join('');
+  $('#radarListKw').innerHTML = crawl.map(dealCardHtml).join('');
+  $('#radarGroupSearch').classList.toggle('hidden', !search.length);
+  $('#radarGroupKw').classList.toggle('hidden', !crawl.length);
+  $('#dealRadar').classList.toggle('hidden', !items.length);
+  $('#radarNote').textContent = items.length
+    ? `검색 ${search.length} · 키워드/공홈 ${crawl.length}${payload.updatedAt ? ' · ' + relTime(payload.updatedAt) + ' 갱신' : ''}${payload.refreshing ? ' · 수집 중…' : ''}`
+    : '';
+}
+$('#radarRefresh').addEventListener('click', async () => {
+  const btn = $('#radarRefresh'); const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '수집 중…';
+  try {
+    await fetch('/api/deals/refresh?malls=1', { method: 'POST' });
+    toast('핫딜 수집 시작 — 잠시 후 자동 반영됩니다');
+    setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 12000);
+    let n = 0; const iv = setInterval(async () => { n++; await loadDeals(); if (n >= 15) clearInterval(iv); }, 10000);
+  } catch { toast('갱신 실패'); btn.disabled = false; btn.textContent = old; }
+});
+
+/* ===== 관심상품 담기 ===== */
+function setWatchBtn(on) {
+  const b = $('#watchBtn');
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.classList.toggle('on', !!on);
+  b.textContent = on ? '✓ 관심상품 추적 중' : '＋ 관심상품 담기';
+}
+$('#watchBtn').addEventListener('click', async () => {
+  if (!currentResult) return;
+  const r = currentResult;
+  const on = $('#watchBtn').getAttribute('aria-pressed') === 'true';
+  try {
+    if (on) {
+      await fetch('/api/watch/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: r.query }) });
+      setWatchBtn(false); toast('관심상품에서 제외했습니다');
+    } else {
+      await fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: r.query, label: r.product?.title || r.query, url: r.product?.url || null, priceOverride: r.product?.price ?? null }) });
+      setWatchBtn(true); toast('관심상품에 담았습니다 — 주기적으로 시세를 추적합니다');
+    }
+  } catch { toast('관심상품 처리에 실패했습니다'); }
+});
+
 /* ===== 견본 버튼 ===== */
 $$('.try').forEach((b) => b.addEventListener('click', () => {
   $('#urlInput').value = b.dataset.q;
@@ -489,6 +634,7 @@ $$('.try').forEach((b) => b.addEventListener('click', () => {
 /* ===== 초기화 ===== */
 (async function init() {
   showView('empty');
+  loadDeals();
   await loadHistory();
 
   const id = new URLSearchParams(location.search).get('id');

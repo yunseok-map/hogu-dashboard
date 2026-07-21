@@ -6,7 +6,11 @@ import { parseProduct, buildSearchQuery } from './src/search/productParser.js';
 import { closeBrowser, cdpStatus } from './src/crawl/browserFetch.js';
 import { searchSimilar } from './src/search/searchProviders.js';
 import { judge } from './src/verdict.js';
-import { listHistory, saveResult, getResult, deleteResult } from './src/store.js';
+import {
+  listHistory, saveResult, getResult, deleteResult, recordPricePoint, readPriceSeriesByHash,
+  readDeals, saveDeals, dealsStale, listWatch, addWatch, removeWatch, isWatched, markWatchSampled,
+} from './src/store.js';
+import { collectHistoryDeals, collectCrawledDeals, mergeDeals } from './src/deals/collect.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +78,26 @@ async function analyze(input, onProgress = () => {}) {
     analyzedAt: new Date().toISOString(),
     elapsedMs: Date.now() - started,
   };
+
+  // 가격 히스토리(일자별) 패시브 적립 — 실패해도 분석 흐름은 유지
+  try {
+    const s = verdict.stats;
+    if (product.price != null || s) {
+      const now = new Date();
+      const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const point = {
+        date, ts: now.toISOString(),
+        myPrice: product.price ?? null,
+        min: s?.min ?? null, median: s?.median ?? null, avg: s?.avg ?? null, max: s?.max ?? null, count: s?.count ?? 0,
+        score: verdict.score ?? null, tier: verdict.tier ?? null,
+      };
+      const rec = recordPricePoint(query, point, product.title || query);
+      if (rec) { result.priceKey = rec.hash; result.priceHistory = rec.points; }
+    }
+  } catch { /* 히스토리 적립 실패는 무시 */ }
+
+  result.watched = isWatched(query);
+
   onProgress('save', '결과 저장 중…');
   result.id = saveResult(result);
   return result;
@@ -98,6 +122,22 @@ function buildReviewLinks(title) {
     links.push({ name: 'LG전자 공식몰', url: `https://www.lge.co.kr/search?search=${q}` });
   }
   return links;
+}
+
+/** 관심상품 전체를 재분석해 가격점을 적립(수동 refresh·스케줄러 공용). 개별 실패는 무시. */
+async function refreshWatched() {
+  const done = [];
+  for (const w of listWatch()) {
+    try {
+      const input = w.url
+        ? { url: w.url, priceOverride: w.priceOverride ?? undefined, deep: !!w.deep }
+        : { query: w.query || w.key, priceOverride: w.priceOverride ?? undefined, deep: !!w.deep };
+      await analyze(input);
+      markWatchSampled(w.key);
+      done.push(w.key);
+    } catch { /* 개별 관심상품 실패 무시 */ }
+  }
+  return done;
 }
 
 // ---- API ----
@@ -142,6 +182,59 @@ app.get('/api/history/:id', (req, res) => {
 });
 app.delete('/api/history/:id', (req, res) => res.json({ ok: deleteResult(req.params.id) }));
 
+// 가격 히스토리(일자별 시계열) — 저장된 결과 재오픈 시 최신 series 재조회용
+app.get('/api/price-history/:key', (req, res) => res.json({ points: readPriceSeriesByHash(req.params.key) }));
+
+// ---- 핫딜 레이더 (2트랙: 검색기반 백본 + 키워드/공홈 크롤 캐시) ----
+const DEALS_TTL_MS = 30 * 60 * 1000; // 크롤 캐시 30분 지연 갱신
+let dealsRefreshing = false;
+let kwOffset = 0; // 매 갱신마다 다른 키워드 훑기
+
+/** 크롤 소스(키워드[+공홈])를 백그라운드로 갱신해 캐시에 저장. 중복 실행 방지. */
+async function kickDealsRefresh({ malls = false } = {}) {
+  if (dealsRefreshing) return;
+  dealsRefreshing = true;
+  try {
+    const crawled = await collectCrawledDeals({ malls, deep: true, offset: kwOffset, max: 5 });
+    kwOffset += 5;
+    // malls 미크롤 시 기존 공홈 딜은 보존
+    const prevMall = malls ? [] : (readDeals().items || []).filter((d) => d.source === '공홈');
+    saveDeals(mergeDeals([], [...crawled, ...prevMall]));
+  } catch { /* 갱신 실패 무시 */ } finally { dealsRefreshing = false; }
+}
+
+// 즉시 반환: 백본(신선·빠름) + 캐시(키워드/공홈). stale이면 백그라운드 갱신을 걸어둔다.
+app.get('/api/deals', (_req, res) => {
+  const cache = readDeals();
+  if (dealsStale(DEALS_TTL_MS)) kickDealsRefresh({ malls: false });
+  res.json({ updatedAt: cache.updatedAt, items: mergeDeals(collectHistoryDeals(), cache.items), refreshing: dealsRefreshing });
+});
+
+// 강제 갱신(비블로킹) — ?malls=1 이면 공홈 레지스트리 크롤 포함. 진행은 백그라운드.
+app.post('/api/deals/refresh', (req, res) => {
+  kickDealsRefresh({ malls: req.query.malls === '1' || (req.body && req.body.malls === true) });
+  res.json({ ok: true, refreshing: true });
+});
+
+// ---- 관심상품(watch) ----
+app.get('/api/watch', (_req, res) => res.json(listWatch()));
+app.post('/api/watch', (req, res) => {
+  const b = req.body || {};
+  const key = b.query || b.key;
+  if (!key) return res.status(400).json({ error: 'query 필요' });
+  const list = addWatch(key, { label: b.label || key, query: b.query || null, url: b.url || null, priceOverride: b.priceOverride ?? null, deep: !!b.deep });
+  res.json({ watched: true, list });
+});
+app.post('/api/watch/remove', (req, res) => {
+  const b = req.body || {};
+  res.json({ watched: false, list: removeWatch(b.query || b.key || '') });
+});
+// 관심상품 즉시 재수집(가격점 적립) — 수동/스케줄러 공용
+app.post('/api/watch/refresh', async (_req, res) => {
+  try { res.json({ ok: true, sampled: await refreshWatched() }); }
+  catch (e) { res.status(500).json({ ok: false, error: String(e.message || e) }); }
+});
+
 app.get('/api/health', async (_req, res) =>
   res.json({
     ok: true,
@@ -149,6 +242,18 @@ app.get('/api/health', async (_req, res) =>
     cdp: await cdpStatus(),
   })
 );
+
+// 옵션 스케줄러 — env HOGU_REFRESH_MIN(분)마다 딜(공홈 포함)+관심상품 재수집. 기본 off.
+const REFRESH_MIN = Number(process.env.HOGU_REFRESH_MIN || 0);
+if (REFRESH_MIN > 0) {
+  setInterval(() => {
+    kickDealsRefresh({ malls: true });
+    refreshWatched().catch(() => {});
+  }, REFRESH_MIN * 60 * 1000).unref();
+  console.log(`[hogu] 스케줄러 ON — ${REFRESH_MIN}분마다 딜(공홈 포함)·관심상품 재수집`);
+}
+// 시작 시 크롤 캐시가 비었/오래됐으면 백그라운드로 키워드 딜 예열(비블로킹)
+if (dealsStale(DEALS_TTL_MS)) kickDealsRefresh({ malls: false });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, async () => { await closeBrowser(); process.exit(0); });

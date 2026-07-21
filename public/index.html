@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>호구체크®</title>
 <meta name="description" content="사기 전에 검사합시다 — 시세·유사 상품·리뷰로 호구 여부를 판별하는 로컬 도구">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23d7f53f'/%3E%3Ctext x='16' y='23' font-size='17' font-weight='900' text-anchor='middle' fill='%23131313'%3E호%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ceff2e'/%3E%3Ctext x='16' y='23' font-size='17' font-weight='900' text-anchor='middle' fill='%23141018'%3E호%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#f2f1ea">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,7 +34,10 @@
 
   <header class="hdr">
     <a class="logo" href="/">호구체크<sup>®</sup></a>
-    <button id="homeBtn" class="nav-btn" type="button">기록<b id="histCount">0</b></button>
+    <div class="hdr-right">
+      <span class="hdr-reg">시세감정소 · REG.2026</span>
+      <button id="homeBtn" class="nav-btn" type="button">기록<b id="histCount">0</b></button>
+    </div>
   </header>
 
   <!-- 의뢰 폼 -->
@@ -56,6 +63,23 @@
 
   <!-- 초기 화면 -->
   <section id="empty">
+    <!-- 핫딜 레이더 — 2트랙(검색 기반 / 키워드 자동 크롤). 딜 없으면 JS가 그룹/전체를 숨김 -->
+    <section id="dealRadar" class="radar hidden">
+      <div class="radar-head">
+        <span class="radar-title">핫딜 레이더<span class="radar-live">LIVE</span></span>
+        <span id="radarNote" class="radar-note"></span>
+        <button id="radarRefresh" class="radar-refresh" type="button" title="키워드·공홈 새로고침">↻ 새로고침</button>
+      </div>
+      <div id="radarGroupSearch" class="radar-group">
+        <div class="radar-grouphead"><span class="rg-label">검색 기반</span><span class="rg-sub">검사한 상품에서 포착</span></div>
+        <ol id="radarList" class="radar-list"></ol>
+      </div>
+      <div id="radarGroupKw" class="radar-group">
+        <div class="radar-grouphead"><span class="rg-label">자동 크롤 특가</span><span class="rg-sub">인기 키워드·공식몰 자동 수집</span></div>
+        <ol id="radarListKw" class="radar-list"></ol>
+      </div>
+    </section>
+
     <h1 class="mega">이 가격,<br><em class="outline">호구</em>일까?</h1>
     <div class="lede-row">
       <p class="lede">링크나 상품명을 넣으면 시세 분포·유사 상품·리뷰 평판을 훑어서
@@ -85,23 +109,28 @@
   <!-- 결과 -->
   <article id="result" class="hidden">
 
-    <!-- 판정 히어로 -->
-    <section class="hero">
-      <div class="hero-score">
-        <span id="verdictScore" class="big-num">0</span>
-        <span class="big-unit">/100<br>호구지수</span>
+    <!-- 판정 콕핏: 히어로(점수·스티커·미터) + 사유 + 딜을 한 벤토로 -->
+    <div class="cockpit">
+      <div class="cockpit-main">
+        <section class="hero">
+          <div class="hero-score">
+            <span id="verdictScore" class="big-num">0</span>
+            <span class="big-unit">/100<br>호구지수</span>
+          </div>
+          <div class="hero-side">
+            <span id="verdictLabel" class="sticker">판정</span>
+            <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
+            <div class="meter-ends"><span>개이득</span><span>호구</span></div>
+            <button id="watchBtn" class="watch-btn" type="button" aria-pressed="false">＋ 관심상품 담기</button>
+          </div>
+        </section>
+        <ol id="reasons" class="findings"></ol>
+        <div id="verdictWarnings" class="warns"></div>
       </div>
-      <div class="hero-side">
-        <span id="verdictLabel" class="sticker">판정</span>
-        <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
-        <div class="meter-ends"><span>개이득</span><span>호구</span></div>
-      </div>
-    </section>
-    <ol id="reasons" class="findings"></ol>
-    <div id="verdictWarnings" class="warns"></div>
 
-    <!-- 이래서 이득 (상황별로 JS가 렌더) -->
-    <section id="dealBox" class="deal hidden"></section>
+      <!-- 이래서 이득 (상황별로 JS가 렌더) -->
+      <section id="dealBox" class="deal hidden"></section>
+    </div>
 
     <!-- 시세 마퀴 -->
     <div class="ticker ticker-data" aria-hidden="true"><div id="priceTicker" class="ticker-track"></div></div>
@@ -127,6 +156,16 @@
       <h2 class="sec-h"><i>02</i>시세 분포<span class="sec-note">점 클릭 = 판매처 이동</span></h2>
       <div id="chartLegend" class="legend"></div>
       <div class="chart-box"><svg id="priceChart" width="100%" height="150"></svg></div>
+
+      <!-- 가격 추이(일자별) — 관측 2시점 이상일 때만 JS가 표시 -->
+      <div id="historyBlock" class="hist-block hidden">
+        <div class="hist-head">
+          <h3 class="hist-h">가격 추이<span class="hist-sub">일자별</span></h3>
+          <span id="historyLegend" class="legend"></span>
+          <span id="historyNote" class="sec-note"></span>
+        </div>
+        <div class="chart-box"><svg id="historyChart" width="100%" height="150"></svg></div>
+      </div>
     </section>
 
     <section id="altSection" class="sec hidden">
