@@ -7,36 +7,28 @@
 ## 0. 한 줄 요약
 상품 링크/키워드를 넣으면 시세·유사 상품·리뷰·쿠폰을 크롤링해 **호구지수(0~100)** 를 매기고, **쿠폰 적용 실구매가 기준 최저 딜**과 "왜 이득인지" 설득 문구까지 뽑아주는 로컬 웹앱(Node+Express, 포트 3311). 외부 LLM/유료 API 없음.
 
-## 1. 어디서 작업하고, 어떻게 배포하나 (제일 중요 — 저장소가 2개다)
+## 1. 어디서 작업하고, 어떻게 배포하나 (단일 저장소 — 단순)
 
-| 구분 | 경로 / URL | 용도 |
-|---|---|---|
-| **개발 워크트리** | `C:\Users\A\Desktop\claude-test\.claude\worktrees\product-price-comparison-dashboard-d6196a\hogu-dashboard` | 실제 개발·실행·테스트. `node_modules`/`data`/`.env`/`.claude`(스킬·에이전트) 여기 있음. 이 워크트리 git은 **all-food-map** 저장소(브랜치 `claude/product-price-comparison-dashboard-d6196a`)이고 hogu-dashboard는 그 하위 폴더 |
-| **배포용 클린 저장소** | `C:\Users\A\AppData\Local\Temp\hogu-dashboard-repo` → **https://github.com/yunseok-map/hogu-dashboard** (브랜치 main) | 호구체크만 루트로 담은 깨끗한 저장소. **여기가 공개 제품 저장소.** `%TEMP%`라 지워질 수 있음(아래 재생성) |
+- **개발 폴더 = GitHub 저장소** (2025년 이후 통합). 경로: **`C:\Users\A\Desktop\hogu-check`**
+  → origin = **https://github.com/yunseok-map/hogu-dashboard** (브랜치 main). `node_modules`/`data`/`.claude`/`.env` 다 여기 있음.
+- 예전엔 all-food-map 워크트리 + %TEMP% 클린 저장소로 복사→push 하는 2단계였으나, **독립 폴더로 clone해 정리함**(복사 과정 폐기). 이제 여기서 바로 커밋·push.
 
-**개발은 워크트리에서** 하고, GitHub에 올릴 땐 바뀐 파일을 클린 저장소로 복사→커밋→push 한다(경로 매핑: 워크트리의 `hogu-dashboard/X` → 클린 저장소의 `X`).
-
-### 배포(동기화) 절차
+### 배포 절차 (바로 push)
 ```bash
-SRC="C:/Users/A/Desktop/claude-test/.claude/worktrees/product-price-comparison-dashboard-d6196a/hogu-dashboard"
-DST="/c/Users/A/AppData/Local/Temp/hogu-dashboard-repo"
-# 클린 저장소가 사라졌으면 재생성:
-[ -d "$DST/.git" ] || git clone https://github.com/yunseok-map/hogu-dashboard.git "$DST"
-# 바뀐 파일만 복사 (예시) — git status로 확인 후:
-cp "$SRC/src/search/searchProviders.js" "$DST/src/search/searchProviders.js"   # 필요한 파일들
-cd "$DST" && git add -A
+cd C:/Users/A/Desktop/hogu-check
+git add -A
 git -c user.name="yunseok-map" -c user.email="yunseok1312@gmail.com" commit -m "<메시지>
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 git push origin main
 ```
 - 커밋 author는 `yunseok-map / yunseok1312@gmail.com`.
-- **절대 올리지 말 것**: `node_modules/`, `data/`(분석 기록·API키 무관), `.env`, `_*.png`(스크래치) — `.gitignore`가 잡지만 확인.
-- 워크트리 자체(all-food-map)에 커밋할 필요는 보통 없음. GitHub 제품 저장소(클린)만 관리.
+- **커밋 안 되는 것**(.gitignore): `node_modules/`, `data/`(로컬 분석 기록), `.env`, `_*.png`/`_*.mjs`(스크래치).
+- (참고) 옛 워크트리 `...\worktrees\...\hogu-dashboard`에도 사본이 남아있을 수 있으나 **이제 안 씀** — 개발은 `Desktop\hogu-check`에서만.
 
 ## 2. 실행 & 검증
 
 ```bash
-cd <워크트리>/hogu-dashboard
+cd C:/Users/A/Desktop/hogu-check
 npm install            # 최초 1회 (cheerio, express, playwright-core)
 node server.js         # → http://localhost:3311  (포트 3311)
 ```
@@ -69,7 +61,7 @@ hogu-dashboard/
   docs/SEARCH-PRECISION.md  유사도 규칙 + 검증 케이스
   tools/                 probe·search-probe·mall-probe·launch-chrome (진단·실행 도구)
   test/                  precision-test.mjs (유사도 회귀 테스트)
-  .claude/               skills(token-diet, ui-work) + agents(cheap-probe) + launch.json  (워크트리에만)
+  .claude/               skills(token-diet, ui-work) + agents(cheap-probe) + launch.json  (저장소에 포함 — clone 시 따라옴)
 ```
 
 ## 4. 핵심 동작
