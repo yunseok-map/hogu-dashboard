@@ -1,6 +1,7 @@
 # 호구체크 — 작업 인수인계 (HANDOFF)
 
 > **새 채팅에서 이 프로젝트를 이어갈 때 이 파일을 먼저 읽으면 된다.**
+> 🚀 **배포 라이브 중 + 재부팅 검증·다음 작업(보안 S1·S2·S3)은 `docs/ops/DEPLOY-STATUS.md` 참고.**
 > 상세 규칙은 아래 문서들에 나눠져 있다: 아키텍처=`CLAUDE.md`, UI=`docs/design/DESIGN.md`, 검색 정밀도=`docs/search/SEARCH-PRECISION.md`.
 > 작업 전 프로젝트 스킬 `token-diet`(항상)·`ui-work`(UI 작업 시) 로드 필수.
 
