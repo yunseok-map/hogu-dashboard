@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+// 환경별 데이터 분리: HOGU_DATA_DIR 지정 시 그 경로(예: prod=./data-prod), 아니면 ../data
+const DATA_DIR = process.env.HOGU_DATA_DIR
+  ? path.resolve(process.env.HOGU_DATA_DIR)
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const RESULTS_DIR = path.join(DATA_DIR, 'results');
 const PRICES_DIR = path.join(DATA_DIR, 'prices');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');

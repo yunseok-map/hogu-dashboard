@@ -35,6 +35,12 @@ node server.js         # → http://localhost:3311  (포트 3311)
 - **봇 차단 사이트(쿠팡 등)**: 서버가 실제 Chrome을 자동 실행(headless 아님, 화면 밖)해 CDP(9222)로 붙어 크롤링. `npm run chrome`으로 직접 띄워 둬도 됨. `HOGU_NO_AUTO_CHROME=1`로 끔.
 - **네이버 쇼핑 API**(선택): `.env`에 `NAVER_CLIENT_ID/SECRET` 넣으면 활성. 없어도 동작.
 
+### 환경 분리 (QA/prod) & 배포
+- `HOGU_ENV=qa`(기본, 로컬 개발) | `prod`(배포). `src/env.js`가 `.env.<env>`→`.env` 로드(최상단 import). 설정 템플릿=`.env.{qa,prod}.example`.
+- **prod 방어**(`src/guard.js`): IP 레이트리밋 + 동시성 캡 + SSRF(사설IP+쇼핑몰 allowlist) + 관리자 토큰(`HOGU_ADMIN_TOKEN`, 쓰기/딜갱신/기록삭제). QA는 무제한(사설IP만 차단).
+- 데이터 분리: `HOGU_DATA_DIR=./data-prod`(gitignore `data-*/`).
+- **배포=Cloudflare Tunnel**(크롤러가 로컬 크롬 의존 → 서버리스 불가): `HOGU_ENV=prod node server.js` → `cloudflared tunnel --url http://localhost:3311`. 상세는 README '배포' 섹션.
+
 ### 저비용 검증 도구 (토큰 절약 — 원본 HTML 안 뽑음)
 ```bash
 node tools/probe.mjs "<상품URL>"              # 파서 압축 요약

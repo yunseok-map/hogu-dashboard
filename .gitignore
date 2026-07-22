@@ -1,5 +1,10 @@
 node_modules/
 data/
+data-*/
 .env
+.env.*
+!.env.example
+!.env.qa.example
+!.env.prod.example
 **/_*.png
 **/_*.mjs

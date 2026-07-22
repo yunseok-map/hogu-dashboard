@@ -18,6 +18,8 @@
 | 파일 | 역할 |
 |---|---|
 | server.js | Express, SSE 스트리밍 분석(`/api/analyze/stream`), POST `/api/analyze`, 히스토리 CRUD, **가격 히스토리 적립 훅+`/api/price-history/:key`**, **핫딜 `/api/deals`(즉시 반환: 백본+캐시 병합, stale 시 백그라운드 `kickDealsRefresh` 트리거)·`/api/deals/refresh?malls=1`(비블로킹)**, **관심상품 `/api/watch`(+`/remove`,`/refresh`=재분석 적립)**, **옵션 스케줄러(`HOGU_REFRESH_MIN`분마다 딜(deep 키워드+공홈)+관심상품 재수집, 기본 off)**, `.env` 로더. ⚠ 스트림은 `price`→`priceOverride` 매핑하지만 POST `/api/analyze`는 body를 그대로 넘겨 `priceOverride` 필드를 기대 |
+| src/env.js | **환경 로더(최상단 import 필수)**. `HOGU_ENV`(qa\|prod) → `.env.<env>`→`.env` 로드. `ENV`/`IS_PROD` export. store.js가 `HOGU_DATA_DIR`를 읽기 전에 실행돼야 함 |
+| src/guard.js | **공개(prod) 방어**. IP 레이트리밋(`hitRateLimit`/`rateLimitMw`), 전역 동시성(`acquireSlot`/`releaseSlot`), SSRF `checkCrawlUrl`(스킴+사설IP DNS+prod allowlist), `adminGuard`(prod 토큰 fail-closed), `clientIp`(CF-Connecting-IP). **QA에선 전부 무제한**(단 사설IP는 항상 차단) |
 | src/crawl/fetchPage.js | 브라우저 헤더 위장 fetch + EUC-KR 처리 (1차) |
 | src/crawl/browserFetch.js | 봇 차단 시 2차: ①열린 CDP Chrome → ②서버가 실제 Chrome 자동 spawn(화면밖, 전용 프로필)+CDP → ③headless 폴백. 오리진 홈 방문 워밍업(Akamai 쿠키)+차단 감지 1회 재시도. 60s 유휴/서버종료 시 정리. `HOGU_NO_AUTO_CHROME=1`로 자동실행 차단 |
 | src/search/productParser.js | 1차 HTTP → 차단·가격누락 시 2차 브라우저 재시도. JSON-LD → OG → 사이트 어댑터(스마트스토어/쿠팡) → 인라인 JSON 순 파싱. 추출 품질 점수로 더 나은 결과 채택 |

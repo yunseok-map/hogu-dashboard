@@ -645,6 +645,12 @@ $$('.try').forEach((b) => b.addEventListener('click', () => {
   if (health?.naverApi) base.unshift('네이버쇼핑API');
   const deep = ['SSG', '11번가', '옥션', 'G마켓'];
   $('#srcStatus').textContent = `가격 소스: ${base.join(' · ')} + 정밀검색 시 ${deep.join('·')}`;
+  // 운영(prod) 모드: 관리자 전용 버튼(관심상품·레이더 새로고침) 숨김
+  if (health?.env === 'prod') {
+    document.body.classList.add('is-prod');
+    $('#watchBtn')?.classList.add('hidden');
+    $('#radarRefresh')?.classList.add('hidden');
+  }
   if (health && health.cdp && health.cdp.chromeFound === false) {
     toast('Chrome이 없어 일부 차단 사이트는 상품명+가격 입력으로 이용하세요', 4000);
   }

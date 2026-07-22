@@ -55,8 +55,43 @@ npm start        # → http://localhost:3311
 | GET | `/api/analyze/stream?url=…&price=…&deep=1` 또는 `?query=…` | SSE 진행상황 + 결과 (deep=1: 메이저몰 포함) |
 | POST | `/api/analyze` `{url \| query, priceOverride?, deep?}` | 단발 분석 (스크립트용) |
 | GET | `/api/history` / `/api/history/:id` | 히스토리 목록 / 상세 |
-| DELETE | `/api/history/:id` | 기록 삭제 |
-| GET | `/api/health` | 서버·API 키 상태 |
+| DELETE | `/api/history/:id` | 기록 삭제 *(prod: 관리자)* |
+| GET | `/api/price-history/:key` | 일자별 가격 시계열 |
+| GET | `/api/deals` | 핫딜 레이더(검색기반 + 키워드/공홈) |
+| POST | `/api/deals/refresh?malls=1` | 딜 강제 갱신(비블로킹) *(prod: 관리자)* |
+| GET | `/api/watch` | 관심상품 목록 |
+| POST | `/api/watch` / `/api/watch/remove` / `/api/watch/refresh` | 관심상품 담기/제외/재수집 *(prod: 관리자)* |
+| GET | `/api/health` | 서버·환경·방어 상태 |
+
+## 환경 분리 (QA / prod)
+
+`HOGU_ENV`로 **QA(로컬 개발)** 와 **prod(배포/운영)** 를 나눈다. `.env.<env>` → `.env` 순으로 로드.
+
+```bash
+node server.js                 # 기본 QA (방어 off, 무제한)
+HOGU_ENV=prod node server.js   # 운영 (방어계층 ON)
+```
+
+- **QA**: 모든 엔드포인트 개방(개발 편의). 단 사설/루프백 IP 크롤은 항상 차단.
+- **prod**: ①IP 레이트리밋 ②전역 동시성 캡 ③SSRF 차단(사설IP + 쇼핑몰 allowlist) ④쓰기/무거운 엔드포인트 관리자 토큰(`HOGU_ADMIN_TOKEN`, `x-hogu-admin` 헤더). 관심상품·딜 새로고침 버튼은 자동 숨김.
+- 데이터도 분리 가능: `HOGU_DATA_DIR=./data-prod`. 설정값은 **`.env.qa.example` / `.env.prod.example`** 참고(복사해서 `.env.qa` / `.env.prod`로).
+
+## 배포 — Cloudflare Tunnel (권장)
+
+크롤러가 **로컬 실제 Chrome**에 의존하므로 compute는 이 PC에 두고 공개만 Cloudflare로 낸다. 서버리스(Pages/Workers)엔 그대로 못 올라간다.
+
+```bash
+# 1) 운영 서버 실행 (관리자 토큰 필수)
+#    .env.prod 준비 후:
+HOGU_ENV=prod node server.js
+
+# 2) 터널로 공개 URL 발급
+winget install --id Cloudflare.cloudflared        # 최초 1회
+cloudflared tunnel --url http://localhost:3311    # 즉석 https://*.trycloudflare.com
+#   영구 도메인: cloudflared tunnel login → create → route dns → run → service install
+```
+
+> ⚠️ 공개 시 앱엔 계정이 없으므로 **prod 모드 + 관리자 토큰**이 안전장치다. 한 대에서 **순차 크롤**이라 대량 동시접속용은 아니며, 각 쇼핑몰 이용약관·robots 확인은 운영자 책임.
 
 ## 개발용 프로브 (토큰 절약)
 

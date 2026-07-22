@@ -1,6 +1,6 @@
+import './src/env.js'; // ⚠ 최상단: 환경(.env.<qa|prod> → .env) 로드 후 다른 모듈이 env를 읽음
 import express from 'express';
 import path from 'node:path';
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseProduct, buildSearchQuery } from './src/search/productParser.js';
 import { closeBrowser, cdpStatus } from './src/crawl/browserFetch.js';
@@ -11,20 +11,14 @@ import {
   readDeals, saveDeals, dealsStale, listWatch, addWatch, removeWatch, isWatched, markWatchSampled,
 } from './src/store.js';
 import { collectHistoryDeals, collectCrawledDeals, mergeDeals } from './src/deals/collect.js';
+import { ENV, IS_PROD } from './src/env.js';
+import { rateLimitMw, hitRateLimit, clientIp, acquireSlot, releaseSlot, checkCrawlUrl, adminGuard, guardStatus } from './src/guard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// .env 로드 (dotenv 없이 — 의존성 최소화)
-try {
-  const env = fs.readFileSync(path.join(__dirname, '.env'), 'utf-8');
-  for (const line of env.split('\n')) {
-    const m = line.match(/^\s*([\w.]+)\s*=\s*(.*?)\s*$/);
-    if (m && !m[1].startsWith('#') && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-} catch { /* .env 없음 — 선택 사항 */ }
-
 const app = express();
-app.use(express.json());
+app.set('trust proxy', true); // Cloudflare Tunnel 뒤 실제 IP 신뢰
+app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = Number(process.env.PORT || 3311);
@@ -155,22 +149,42 @@ app.get('/api/analyze/stream', async (req, res) => {
     priceOverride: req.query.price ? Number(req.query.price) : undefined,
     deep: req.query.deep === '1',
   };
+
+  // 공개(prod) 방어: 레이트리밋 → SSRF URL 검사 → 전역 동시성 캡
+  const rl = hitRateLimit('analyze', clientIp(req));
+  if (!rl.ok) { send('result', { ok: false, error: `요청이 많습니다. ${rl.retry}초 후 다시 시도해 주세요.` }); return res.end(); }
+  if (input.url) {
+    const chk = await checkCrawlUrl(String(input.url));
+    if (!chk.ok) { send('result', { ok: false, error: chk.reason }); return res.end(); }
+  }
+  if (!acquireSlot()) { send('result', { ok: false, error: '지금 검사 요청이 몰려 있습니다. 잠시 후 다시 시도해 주세요.' }); return res.end(); }
+
   try {
     const result = await analyze(input, (step, detail) => send('progress', { step, detail }));
     send('result', result);
   } catch (e) {
     send('result', { ok: false, error: '분석 중 오류: ' + String(e.message || e) });
+  } finally {
+    releaseSlot();
   }
   res.end();
 });
 
 // 단발 POST 분석 (curl/스크립트용)
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', rateLimitMw('analyze'), async (req, res) => {
+  const body = req.body || {};
+  if (body.url) {
+    const chk = await checkCrawlUrl(String(body.url));
+    if (!chk.ok) return res.status(400).json({ ok: false, error: chk.reason });
+  }
+  if (!acquireSlot()) return res.status(429).json({ ok: false, error: '검사 요청이 많습니다. 잠시 후 다시 시도해 주세요.' });
   try {
-    const result = await analyze(req.body || {});
+    const result = await analyze(body);
     res.status(result.ok ? 200 : 422).json(result);
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    releaseSlot();
   }
 });
 
@@ -180,7 +194,7 @@ app.get('/api/history/:id', (req, res) => {
   if (!r) return res.status(404).json({ error: 'not found' });
   res.json(r);
 });
-app.delete('/api/history/:id', (req, res) => res.json({ ok: deleteResult(req.params.id) }));
+app.delete('/api/history/:id', adminGuard, (req, res) => res.json({ ok: deleteResult(req.params.id) }));
 
 // 가격 히스토리(일자별 시계열) — 저장된 결과 재오픈 시 최신 series 재조회용
 app.get('/api/price-history/:key', (req, res) => res.json({ points: readPriceSeriesByHash(req.params.key) }));
@@ -210,27 +224,27 @@ app.get('/api/deals', (_req, res) => {
   res.json({ updatedAt: cache.updatedAt, items: mergeDeals(collectHistoryDeals(), cache.items), refreshing: dealsRefreshing });
 });
 
-// 강제 갱신(비블로킹) — ?malls=1 이면 공홈 레지스트리 크롤 포함. 진행은 백그라운드.
-app.post('/api/deals/refresh', (req, res) => {
+// 강제 갱신(비블로킹) — ?malls=1 이면 공홈 레지스트리 크롤 포함. 진행은 백그라운드. (prod: 관리자)
+app.post('/api/deals/refresh', adminGuard, (req, res) => {
   kickDealsRefresh({ malls: req.query.malls === '1' || (req.body && req.body.malls === true) });
   res.json({ ok: true, refreshing: true });
 });
 
 // ---- 관심상품(watch) ----
 app.get('/api/watch', (_req, res) => res.json(listWatch()));
-app.post('/api/watch', (req, res) => {
+app.post('/api/watch', adminGuard, (req, res) => {
   const b = req.body || {};
   const key = b.query || b.key;
   if (!key) return res.status(400).json({ error: 'query 필요' });
   const list = addWatch(key, { label: b.label || key, query: b.query || null, url: b.url || null, priceOverride: b.priceOverride ?? null, deep: !!b.deep });
   res.json({ watched: true, list });
 });
-app.post('/api/watch/remove', (req, res) => {
+app.post('/api/watch/remove', adminGuard, (req, res) => {
   const b = req.body || {};
   res.json({ watched: false, list: removeWatch(b.query || b.key || '') });
 });
-// 관심상품 즉시 재수집(가격점 적립) — 수동/스케줄러 공용
-app.post('/api/watch/refresh', async (_req, res) => {
+// 관심상품 즉시 재수집(가격점 적립) — 수동/스케줄러 공용 (prod: 관리자)
+app.post('/api/watch/refresh', adminGuard, async (_req, res) => {
   try { res.json({ ok: true, sampled: await refreshWatched() }); }
   catch (e) { res.status(500).json({ ok: false, error: String(e.message || e) }); }
 });
@@ -238,6 +252,8 @@ app.post('/api/watch/refresh', async (_req, res) => {
 app.get('/api/health', async (_req, res) =>
   res.json({
     ok: true,
+    env: ENV,
+    guard: guardStatus(),
     naverApi: !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET),
     cdp: await cdpStatus(),
   })
@@ -260,6 +276,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 app.listen(PORT, () => {
-  console.log(`[hogu] 호구 방지 대시보드 → http://localhost:${PORT}`);
+  console.log(`[hogu] 호구 방지 대시보드 [${ENV.toUpperCase()}] → http://localhost:${PORT}`);
+  if (IS_PROD) console.log(`[hogu] 운영 모드: 레이트리밋·동시성캡·SSRF차단·관리자게이트 ${process.env.HOGU_ADMIN_TOKEN ? 'ON' : '(⚠ HOGU_ADMIN_TOKEN 미설정 — 관리 엔드포인트 잠김)'}`);
   console.log(`[hogu] 네이버 쇼핑 API: ${process.env.NAVER_CLIENT_ID ? '활성' : '비활성 (.env 설정 시 정확도 상승)'}`);
 });
