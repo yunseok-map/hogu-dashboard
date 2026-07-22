@@ -39,7 +39,8 @@ node server.js         # → http://localhost:3311  (포트 3311)
 - `HOGU_ENV=qa`(기본, 로컬 개발) | `prod`(배포). `src/env.js`가 `.env.<env>`→`.env` 로드(최상단 import). 설정 템플릿=`.env.{qa,prod}.example`.
 - **prod 방어**(`src/guard.js`): IP 레이트리밋 + 동시성 캡 + SSRF(사설IP+쇼핑몰 allowlist) + 관리자 토큰(`HOGU_ADMIN_TOKEN`, 쓰기/딜갱신/기록삭제). QA는 무제한(사설IP만 차단).
 - 데이터 분리: `HOGU_DATA_DIR=./data-prod`(gitignore `data-*/`).
-- **배포=Cloudflare Tunnel**(크롤러가 로컬 크롬 의존 → 서버리스 불가): `HOGU_ENV=prod node server.js` → `cloudflared tunnel --url http://localhost:3311`. 상세는 README '배포' 섹션.
+- **배포=Cloudflare Tunnel**(크롤러가 로컬 크롬 의존 → 서버리스 불가): `npm run start:prod`(=`node start-prod.mjs`, .env.prod 필요) → `cloudflared tunnel --url http://localhost:3390`.
+- **운영자 수동 셋업 체크리스트 = `docs/DEPLOY.md`**(Cloudflare 계정·named tunnel, GitHub 저장소/환경 전략(저장소 분리 비권장), 상시구동, allowlist·rate·history 공개여부, 법무). 런처 `start-{qa,prod}.mjs` + `npm run start:{qa,prod}`.
 
 ### 저비용 검증 도구 (토큰 절약 — 원본 HTML 안 뽑음)
 ```bash

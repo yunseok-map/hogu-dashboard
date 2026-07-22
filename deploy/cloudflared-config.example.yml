@@ -1,0 +1,16 @@
+# Named Tunnel 설정 예시 (영구 도메인용)
+# 배치 위치(Windows): %USERPROFILE%\.cloudflared\config.yml
+# 아래 값은 `cloudflared tunnel login` → `cloudflared tunnel create hogu` 후 채운다.
+
+tunnel: hogu
+credentials-file: C:\Users\<사용자>\.cloudflared\<TUNNEL-UUID>.json
+
+ingress:
+  # 내 도메인 → 로컬 prod 서버(3390)
+  - hostname: hogu.<내도메인>.com
+    service: http://localhost:3390
+  # 그 외 요청은 404
+  - service: http_status:404
+
+# 실행: cloudflared tunnel run hogu
+# 부팅 시 자동(윈도우 서비스): cloudflared service install  (관리자 권한)

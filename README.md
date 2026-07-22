@@ -93,6 +93,8 @@ cloudflared tunnel --url http://localhost:3311    # 즉석 https://*.trycloudfla
 
 > ⚠️ 공개 시 앱엔 계정이 없으므로 **prod 모드 + 관리자 토큰**이 안전장치다. 한 대에서 **순차 크롤**이라 대량 동시접속용은 아니며, 각 쇼핑몰 이용약관·robots 확인은 운영자 책임.
 
+> 📋 **운영자가 직접 해야 할 것**(Cloudflare 계정·도메인, GitHub 저장소/환경 전략, 상시구동, 운영정책, 법무) 전체 체크리스트는 **[docs/DEPLOY.md](docs/DEPLOY.md)** 참고.
+
 ## 개발용 프로브 (토큰 절약)
 
 ```bash

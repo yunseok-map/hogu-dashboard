@@ -6,6 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:qa": "node start-qa.mjs",
+    "start:prod": "node start-prod.mjs",
     "chrome": "node tools/launch-chrome.mjs",
     "probe": "node tools/probe.mjs",
     "search-probe": "node tools/search-probe.mjs",
