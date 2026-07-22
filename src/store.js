@@ -18,12 +18,26 @@ function ensureDirs() {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
 
+// 인메모리 write-through 캐시: 단일 프로세스가 파일을 소유하므로 매 요청 readFileSync+JSON.parse를 없앤다.
+let _historyCache = null;
+let _historyVer = 0;
+
 export function listHistory() {
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
+  if (_historyCache) return _historyCache;
+  try { _historyCache = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8')); }
+  catch { _historyCache = []; }
+  return _historyCache;
+}
+
+/** 히스토리 변경 버전(수집기 메모 무효화용) — 저장/삭제 시 증가. */
+export function historyVersion() { return _historyVer; }
+
+function writeHistory(history) {
+  const capped = history.slice(0, MAX_HISTORY);
+  _historyCache = capped;
+  _historyVer++;
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(capped, null, 1), 'utf-8');
 }
 
 export function saveResult(result) {
@@ -32,8 +46,8 @@ export function saveResult(result) {
   result.id = id;
   fs.writeFileSync(path.join(RESULTS_DIR, `${id}.json`), JSON.stringify(result), 'utf-8');
 
-  const history = listHistory();
-  history.unshift({
+  // 캐시 참조를 in-place 변형하지 않도록 새 배열로 prepend
+  writeHistory([{
     id,
     ts: new Date().toISOString(),
     title: result.product?.title || result.query || '(제목 없음)',
@@ -42,8 +56,7 @@ export function saveResult(result) {
     image: result.product?.image ?? null,
     verdict: result.verdict ? { score: result.verdict.score, tier: result.verdict.tier, emoji: result.verdict.emoji, label: result.verdict.label } : null,
     itemCount: result.similar?.items?.length ?? 0,
-  });
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(0, MAX_HISTORY), null, 1), 'utf-8');
+  }, ...listHistory()]);
   return id;
 }
 
@@ -58,9 +71,7 @@ export function getResult(id) {
 
 export function deleteResult(id) {
   if (!/^[a-z0-9]+$/i.test(id)) return false;
-  const history = listHistory().filter((h) => h.id !== id);
-  ensureDirs();
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 1), 'utf-8');
+  writeHistory(listHistory().filter((h) => h.id !== id));
   try { fs.unlinkSync(path.join(RESULTS_DIR, `${id}.json`)); } catch { /* 이미 없음 */ }
   return true;
 }
@@ -122,16 +133,21 @@ export function keyHashOf(rawKey) { return keyHash(normalizeKey(rawKey)); }
 
 /* ===== 핫딜 레이더 캐시 (data/deals.json) ===== */
 
+let _dealsCache = null;
+
 export function saveDeals(items) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const payload = { updatedAt: new Date().toISOString(), items: items || [] };
+  _dealsCache = payload;
   fs.writeFileSync(DEALS_FILE, JSON.stringify(payload), 'utf-8');
   return payload;
 }
 
 export function readDeals() {
-  try { return JSON.parse(fs.readFileSync(DEALS_FILE, 'utf-8')); }
-  catch { return { updatedAt: null, items: [] }; }
+  if (_dealsCache) return _dealsCache;
+  try { _dealsCache = JSON.parse(fs.readFileSync(DEALS_FILE, 'utf-8')); }
+  catch { _dealsCache = { updatedAt: null, items: [] }; }
+  return _dealsCache;
 }
 
 /** 캐시가 maxAgeMs보다 오래됐거나 비었으면 true. */
@@ -143,12 +159,17 @@ export function dealsStale(maxAgeMs) {
 
 /* ===== 관심상품 watch (data/watch.json) ===== */
 
+let _watchCache = null;
+
 export function listWatch() {
-  try { return JSON.parse(fs.readFileSync(WATCH_FILE, 'utf-8')); }
-  catch { return []; }
+  if (_watchCache) return _watchCache;
+  try { _watchCache = JSON.parse(fs.readFileSync(WATCH_FILE, 'utf-8')); }
+  catch { _watchCache = []; }
+  return _watchCache;
 }
 
 function writeWatch(list) {
+  _watchCache = list;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(WATCH_FILE, JSON.stringify(list, null, 1), 'utf-8');
 }
@@ -157,9 +178,10 @@ function writeWatch(list) {
 export function addWatch(rawKey, entry = {}) {
   const key = normalizeKey(rawKey);
   if (!key) return listWatch();
-  const list = listWatch().filter((w) => w.key !== key);
-  list.unshift({ key, hash: keyHash(key), addedAt: new Date().toISOString(), lastSampled: null, ...entry });
-  writeWatch(list.slice(0, 60));
+  // 캐시 참조를 in-place 변형하지 않도록 새 배열 구성
+  const list = [{ key, hash: keyHash(key), addedAt: new Date().toISOString(), lastSampled: null, ...entry },
+    ...listWatch().filter((w) => w.key !== key)].slice(0, 60);
+  writeWatch(list);
   return list;
 }
 

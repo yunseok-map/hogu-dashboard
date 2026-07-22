@@ -8,7 +8,7 @@ import { searchSimilar } from './src/search/searchProviders.js';
 import { judge } from './src/verdict.js';
 import {
   listHistory, saveResult, getResult, deleteResult, recordPricePoint, readPriceSeriesByHash,
-  readDeals, saveDeals, dealsStale, listWatch, addWatch, removeWatch, isWatched, markWatchSampled,
+  readDeals, saveDeals, dealsStale, listWatch, addWatch, removeWatch, isWatched, markWatchSampled, normalizeKey,
 } from './src/store.js';
 import { collectHistoryDeals, collectCrawledDeals, mergeDeals } from './src/deals/collect.js';
 import { ENV, IS_PROD } from './src/env.js';
@@ -25,11 +25,41 @@ const PORT = Number(process.env.PORT || 3311);
 // 히스토리 목록 공개 여부 — prod에선 기본 비공개(프라이버시). HOGU_PUBLIC_HISTORY=1로 공개 전환.
 const publicHistoryEnabled = () => !IS_PROD || process.env.HOGU_PUBLIC_HISTORY === '1';
 
+// ---- P1 결과 캐시 ----
+// 동일 (url|query · deep · priceOverride) 재분석은 크롤/검색 없이 저장본을 재사용한다.
+// 메모리엔 포인터(id·시각)만 두고 결과 원본은 디스크(getResult)에 둔다 → 메모리 부담 최소.
+const _ttlMin = Number(process.env.HOGU_CACHE_TTL_MIN);
+const RESULT_TTL_MS = (Number.isFinite(_ttlMin) ? _ttlMin : 30) * 60 * 1000; // 0이면 캐시 비활성
+const RESULT_CACHE_MAX = Number(process.env.HOGU_CACHE_MAX) || 300;
+const resultCache = new Map(); // cacheKey -> { id, at }
+
+function analyzeCacheKey(input) {
+  const base = input.url ? 'u:' + String(input.url).trim() : 'q:' + normalizeKey(input.query || '');
+  return `${base}|d:${input.deep ? 1 : 0}|p:${input.priceOverride ?? ''}`;
+}
+
 /**
  * 분석 파이프라인. onProgress(step, detail)로 진행 상황을 알린다.
- * @param {{url?: string, query?: string, priceOverride?: number}} input
+ * @param {{url?: string, query?: string, priceOverride?: number, deep?: boolean}} input
+ * @param {{noCache?: boolean}} opts  noCache=true면 캐시 무시하고 강제 재분석
  */
-async function analyze(input, onProgress = () => {}) {
+async function analyze(input, onProgress = () => {}, { noCache = false } = {}) {
+  const cacheKey = analyzeCacheKey(input);
+  if (!noCache && RESULT_TTL_MS > 0) {
+    const hit = resultCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < RESULT_TTL_MS) {
+      const cached = getResult(hit.id);
+      if (cached && cached.ok) {
+        onProgress('cache', '최근 동일 분석 결과 재사용(캐시)');
+        cached.cached = true;
+        cached.cacheAgeMs = Date.now() - hit.at;
+        cached.watched = isWatched(cached.query || input.query || ''); // watch 토글은 실시간 반영
+        return cached;
+      }
+      resultCache.delete(cacheKey); // 저장본이 사라졌으면 폐기 후 재분석
+    }
+  }
+
   const started = Date.now();
   let product = null;
   let query = (input.query || '').trim();
@@ -96,6 +126,13 @@ async function analyze(input, onProgress = () => {}) {
 
   onProgress('save', '결과 저장 중…');
   result.id = saveResult(result);
+
+  // 성공 결과만 캐시(포인터). 초과 시 가장 오래된 항목 제거(간이 LRU).
+  if (RESULT_TTL_MS > 0 && result.ok) {
+    resultCache.delete(cacheKey);
+    resultCache.set(cacheKey, { id: result.id, at: Date.now() });
+    if (resultCache.size > RESULT_CACHE_MAX) resultCache.delete(resultCache.keys().next().value);
+  }
   return result;
 }
 
@@ -120,15 +157,18 @@ function buildReviewLinks(title) {
   return links;
 }
 
-/** 관심상품 전체를 재분석해 가격점을 적립(수동 refresh·스케줄러 공용). 개별 실패는 무시. */
-async function refreshWatched() {
+/** 관심상품 전체를 재분석해 가격점을 적립(수동 refresh·스케줄러 공용). 개별 실패는 무시.
+ *  onlyStale=true(스케줄러): 오늘 이미 적립된 항목은 건너뛴다(하루 1점이므로 중복 크롤 방지). */
+async function refreshWatched({ onlyStale = false } = {}) {
+  const isToday = (iso) => { try { return new Date(iso).toDateString() === new Date().toDateString(); } catch { return false; } };
   const done = [];
   for (const w of listWatch()) {
+    if (onlyStale && isToday(w.lastSampled)) continue;
     try {
       const input = w.url
         ? { url: w.url, priceOverride: w.priceOverride ?? undefined, deep: !!w.deep }
         : { query: w.query || w.key, priceOverride: w.priceOverride ?? undefined, deep: !!w.deep };
-      await analyze(input);
+      await analyze(input, () => {}, { noCache: true }); // 가격 샘플링은 항상 신선하게
       markWatchSampled(w.key);
       done.push(w.key);
     } catch { /* 개별 관심상품 실패 무시 */ }
@@ -151,6 +191,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     priceOverride: req.query.price ? Number(req.query.price) : undefined,
     deep: req.query.deep === '1',
   };
+  const noCache = req.query.fresh === '1' || req.query.nocache === '1';
 
   // 공개(prod) 방어: 레이트리밋 → SSRF URL 검사 → 전역 동시성 캡
   const rl = hitRateLimit('analyze', clientIp(req));
@@ -162,7 +203,7 @@ app.get('/api/analyze/stream', async (req, res) => {
   if (!acquireSlot()) { send('result', { ok: false, error: '지금 검사 요청이 몰려 있습니다. 잠시 후 다시 시도해 주세요.' }); return res.end(); }
 
   try {
-    const result = await analyze(input, (step, detail) => send('progress', { step, detail }));
+    const result = await analyze(input, (step, detail) => send('progress', { step, detail }), { noCache });
     send('result', result);
   } catch (e) {
     send('result', { ok: false, error: '분석 중 오류: ' + String(e.message || e) });
@@ -181,7 +222,7 @@ app.post('/api/analyze', rateLimitMw('analyze'), async (req, res) => {
   }
   if (!acquireSlot()) return res.status(429).json({ ok: false, error: '검사 요청이 많습니다. 잠시 후 다시 시도해 주세요.' });
   try {
-    const result = await analyze(body);
+    const result = await analyze(body, () => {}, { noCache: body.fresh === true || body.nocache === true });
     res.status(result.ok ? 200 : 422).json(result);
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
@@ -223,7 +264,8 @@ async function kickDealsRefresh({ malls = false } = {}) {
 // 즉시 반환: 백본(신선·빠름) + 캐시(키워드/공홈). stale이면 백그라운드 갱신을 걸어둔다.
 app.get('/api/deals', (_req, res) => {
   const cache = readDeals();
-  if (dealsStale(DEALS_TTL_MS)) kickDealsRefresh({ malls: false });
+  const stale = !cache.updatedAt || !cache.items?.length || (Date.now() - new Date(cache.updatedAt).getTime() > DEALS_TTL_MS);
+  if (stale) kickDealsRefresh({ malls: false });
   res.json({ updatedAt: cache.updatedAt, items: mergeDeals(collectHistoryDeals(), cache.items), refreshing: dealsRefreshing });
 });
 
@@ -259,6 +301,7 @@ app.get('/api/health', async (_req, res) =>
     guard: guardStatus(),
     publicHistory: publicHistoryEnabled(),
     naverApi: !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET),
+    cache: { ttlMin: RESULT_TTL_MS / 60000, entries: resultCache.size },
     cdp: await cdpStatus(),
   })
 );
@@ -266,11 +309,13 @@ app.get('/api/health', async (_req, res) =>
 // 옵션 스케줄러 — env HOGU_REFRESH_MIN(분)마다 딜(공홈 포함)+관심상품 재수집. 기본 off.
 const REFRESH_MIN = Number(process.env.HOGU_REFRESH_MIN || 0);
 if (REFRESH_MIN > 0) {
+  // 기본: 관심상품은 '오늘 미적립분'만 재수집(하루 1점이므로 중복 크롤 방지). HOGU_WATCH_RESAMPLE=all이면 매회 전체.
+  const watchOnlyStale = process.env.HOGU_WATCH_RESAMPLE !== 'all';
   setInterval(() => {
     kickDealsRefresh({ malls: true });
-    refreshWatched().catch(() => {});
+    refreshWatched({ onlyStale: watchOnlyStale }).catch(() => {});
   }, REFRESH_MIN * 60 * 1000).unref();
-  console.log(`[hogu] 스케줄러 ON — ${REFRESH_MIN}분마다 딜(공홈 포함)·관심상품 재수집`);
+  console.log(`[hogu] 스케줄러 ON — ${REFRESH_MIN}분마다 딜(공홈 포함)·관심상품 재수집${watchOnlyStale ? '(오늘 미적립분만)' : ''}`);
 }
 // 시작 시 크롤 캐시가 비었/오래됐으면 백그라운드로 키워드 딜 예열(비블로킹)
 if (dealsStale(DEALS_TTL_MS)) kickDealsRefresh({ malls: false });

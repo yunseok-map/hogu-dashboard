@@ -14,6 +14,7 @@ let pw = null;
 let launched = null;         // playwright가 띄운 headless (최후 폴백)
 let launchedWith = null;
 let idleTimer = null;
+let autoIdleTimer = null;    // 자동 spawn Chrome 유휴 정리 타이머
 
 let autoProc = null;         // 우리가 spawn한 실제 Chrome 프로세스
 let autoLaunching = null;    // 동시 요청 시 중복 실행 방지용 Promise
@@ -23,6 +24,9 @@ const CDP_PORT = Number(process.env.CDP_PORT || 9222);
 const CDP_ENDPOINT = process.env.CDP_ENDPOINT || `http://localhost:${CDP_PORT}`;
 const PROFILE_DIR = path.join(os.tmpdir(), 'hogu-chrome-profile');
 const AUTO_LAUNCH = process.env.HOGU_NO_AUTO_CHROME !== '1'; // 끄고 싶으면 환경변수로
+// 자동 spawn한 실제 Chrome의 유휴 정리(메모리 부담↓). 기본 10분 무활동 시 종료 → 다음 크롤 때 재spawn. 0이면 비활성.
+const _idleMin = Number(process.env.HOGU_CHROME_IDLE_MIN);
+const AUTO_IDLE_MS = (Number.isFinite(_idleMin) ? _idleMin : 10) * 60_000;
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -116,6 +120,17 @@ function scheduleIdleClose() {
   if (idleTimer.unref) idleTimer.unref();
 }
 
+/** 자동 spawn Chrome을 유휴 시 정리(메모리 회수). 크롤 활동마다 리셋되어 무활동 지속 시에만 종료. */
+function scheduleAutoIdleClose() {
+  if (!AUTO_IDLE_MS || !autoProc) return; // 우리가 spawn한 Chrome이 있을 때만(사용자 자체 CDP Chrome은 건드리지 않음)
+  clearTimeout(autoIdleTimer);
+  autoIdleTimer = setTimeout(() => {
+    warmedOrigins.clear(); // 새로 뜰 Chrome은 쿠키가 없으니 워밍업 상태 초기화
+    killAuto();            // 다음 browserFetchPage에서 자동 재spawn
+  }, AUTO_IDLE_MS);
+  if (autoIdleTimer.unref) autoIdleTimer.unref();
+}
+
 /** autoProc 트리를 죽인다. sync=true면 프로세스 종료 훅에서 동기로 실행. */
 function killAuto({ sync = false } = {}) {
   const pid = autoProc?.pid;
@@ -133,6 +148,7 @@ function killAuto({ sync = false } = {}) {
 
 export async function closeBrowser() {
   clearTimeout(idleTimer);
+  clearTimeout(autoIdleTimer);
   try { await launched?.close(); } catch { /* 무시 */ }
   launched = null;
   await killAuto();
@@ -221,12 +237,12 @@ export async function browserFetchPage(url, { timeoutMs = 30000, scroll = false,
   // 1) 이미 열린 CDP Chrome
   if (await cdpAlive()) {
     const r = await fetchViaCDP(url, opts);
-    if (r && r.html) return r;
+    if (r && r.html) { scheduleAutoIdleClose(); return r; }
   }
   // 2) 실제 Chrome 자동 실행 후 CDP
   if (AUTO_LAUNCH && await autoLaunchChrome()) {
     const r = await fetchViaCDP(url, opts);
-    if (r && r.html) return r;
+    if (r && r.html) { scheduleAutoIdleClose(); return r; }
   }
   // 3) 폴백: playwright headless
   let context = null;
