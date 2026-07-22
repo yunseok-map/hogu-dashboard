@@ -634,23 +634,27 @@ $$('.try').forEach((b) => b.addEventListener('click', () => {
 /* ===== 초기화 ===== */
 (async function init() {
   showView('empty');
+
+  // health를 먼저 읽어 환경 플래그 적용(RECORDS 깜빡임 방지)
+  const health = await fetch('/api/health').then((r) => r.json()).catch(() => null);
+  if (health?.env === 'prod') {
+    document.body.classList.add('is-prod');
+    $('#watchBtn')?.classList.add('hidden');
+    $('#radarRefresh')?.classList.add('hidden');
+  }
+  // prod 비공개 히스토리: RECORDS 인덱스·기록 배지 숨김(개별 공유 링크는 동작)
+  if (health && health.publicHistory === false) document.body.classList.add('history-private');
+
   loadDeals();
   await loadHistory();
 
   const id = new URLSearchParams(location.search).get('id');
   if (id) await openResult(id);
 
-  const health = await fetch('/api/health').then((r) => r.json()).catch(() => null);
   const base = ['다나와', '에누리'];
   if (health?.naverApi) base.unshift('네이버쇼핑API');
   const deep = ['SSG', '11번가', '옥션', 'G마켓'];
   $('#srcStatus').textContent = `가격 소스: ${base.join(' · ')} + 정밀검색 시 ${deep.join('·')}`;
-  // 운영(prod) 모드: 관리자 전용 버튼(관심상품·레이더 새로고침) 숨김
-  if (health?.env === 'prod') {
-    document.body.classList.add('is-prod');
-    $('#watchBtn')?.classList.add('hidden');
-    $('#radarRefresh')?.classList.add('hidden');
-  }
   if (health && health.cdp && health.cdp.chromeFound === false) {
     toast('Chrome이 없어 일부 차단 사이트는 상품명+가격 입력으로 이용하세요', 4000);
   }

@@ -286,6 +286,11 @@ a.rd-card:hover { background: var(--paper); }
 .idx-del:hover { color: var(--t-hogu); }
 .idx-empty { padding: 18px 6px; font-size: 13.5px; color: var(--faint); border-bottom: 1px solid var(--line-soft); }
 
+/* prod 비공개 히스토리: RECORDS 인덱스 + 기록 카운트 숨김 (공유 링크 ?id= 는 동작) */
+.history-private .idx-head,
+.history-private #historyList,
+.history-private #histCount { display: none !important; }
+
 /* 미니 스티커 (인덱스용) */
 .mini-stamp {
   flex-shrink: 0; font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: .4px;

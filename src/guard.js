@@ -105,6 +105,13 @@ export async function checkCrawlUrl(rawUrl) {
   return { ok: true };
 }
 
+// ---- 관리자 판별(에러 없이 boolean) ----
+export function isAdmin(req) {
+  if (!IS_PROD) return true;
+  const t = req.headers['x-hogu-admin'] || req.query.admin;
+  return !!ADMIN_TOKEN && t === ADMIN_TOKEN;
+}
+
 // ---- 관리자 게이트(prod: 토큰 필요, 미설정 시 fail-closed) ----
 export function adminGuard(req, res, next) {
   if (!IS_PROD) return next();

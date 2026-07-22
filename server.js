@@ -12,7 +12,7 @@ import {
 } from './src/store.js';
 import { collectHistoryDeals, collectCrawledDeals, mergeDeals } from './src/deals/collect.js';
 import { ENV, IS_PROD } from './src/env.js';
-import { rateLimitMw, hitRateLimit, clientIp, acquireSlot, releaseSlot, checkCrawlUrl, adminGuard, guardStatus } from './src/guard.js';
+import { rateLimitMw, hitRateLimit, clientIp, acquireSlot, releaseSlot, checkCrawlUrl, adminGuard, isAdmin, guardStatus } from './src/guard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +22,8 @@ app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = Number(process.env.PORT || 3311);
+// 히스토리 목록 공개 여부 — prod에선 기본 비공개(프라이버시). HOGU_PUBLIC_HISTORY=1로 공개 전환.
+const publicHistoryEnabled = () => !IS_PROD || process.env.HOGU_PUBLIC_HISTORY === '1';
 
 /**
  * 분석 파이프라인. onProgress(step, detail)로 진행 상황을 알린다.
@@ -188,7 +190,8 @@ app.post('/api/analyze', rateLimitMw('analyze'), async (req, res) => {
   }
 });
 
-app.get('/api/history', (_req, res) => res.json(listHistory()));
+// 목록: prod 비공개 시 관리자만(공유용 개별 /api/history/:id 는 유지)
+app.get('/api/history', (req, res) => res.json(publicHistoryEnabled() || isAdmin(req) ? listHistory() : []));
 app.get('/api/history/:id', (req, res) => {
   const r = getResult(req.params.id);
   if (!r) return res.status(404).json({ error: 'not found' });
@@ -254,6 +257,7 @@ app.get('/api/health', async (_req, res) =>
     ok: true,
     env: ENV,
     guard: guardStatus(),
+    publicHistory: publicHistoryEnabled(),
     naverApi: !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET),
     cdp: await cdpStatus(),
   })
