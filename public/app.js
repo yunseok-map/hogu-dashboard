@@ -1,4 +1,4 @@
-/* 호구체크 v6 "일렉트릭 리소" 프런트엔드 — 구조/규칙은 docs/DESIGN.md 참고 */
+/* 호구체크 v6 "일렉트릭 리소" 프런트엔드 — 구조/규칙은 docs/design/DESIGN.md 참고 */
 'use strict';
 
 const $ = (s) => document.querySelector(s);

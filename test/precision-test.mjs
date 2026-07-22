@@ -1,4 +1,4 @@
-// 검색 정밀도 자동 검증 — docs/SEARCH-PRECISION.md의 케이스와 동기화.
+// 검색 정밀도 자동 검증 — docs/search/SEARCH-PRECISION.md의 케이스와 동기화.
 // 사용법: node test/precision-test.mjs   (실패 시 exit 1)
 import { similarity } from '../src/search/searchProviders.js';
 

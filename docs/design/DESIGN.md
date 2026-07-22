@@ -1,4 +1,4 @@
-# 호구체크 UI 스펙 (docs/DESIGN.md)
+# 호구체크 UI 스펙 (docs/design/DESIGN.md)
 
 > UI 수정 전 이 문서만 읽으면 된다. style.css(~560줄)/app.js(~500줄) 전체를 읽지 말 것.
 > 구조 변경 시 이 문서도 같이 갱신할 것.

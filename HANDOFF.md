@@ -1,7 +1,7 @@
 # 호구체크 — 작업 인수인계 (HANDOFF)
 
 > **새 채팅에서 이 프로젝트를 이어갈 때 이 파일을 먼저 읽으면 된다.**
-> 상세 규칙은 아래 문서들에 나눠져 있다: 아키텍처=`CLAUDE.md`, UI=`docs/DESIGN.md`, 검색 정밀도=`docs/SEARCH-PRECISION.md`.
+> 상세 규칙은 아래 문서들에 나눠져 있다: 아키텍처=`CLAUDE.md`, UI=`docs/design/DESIGN.md`, 검색 정밀도=`docs/search/SEARCH-PRECISION.md`.
 > 작업 전 프로젝트 스킬 `token-diet`(항상)·`ui-work`(UI 작업 시) 로드 필수.
 
 ## 0. 한 줄 요약
@@ -40,7 +40,7 @@ node server.js         # → http://localhost:3311  (포트 3311)
 - **prod 방어**(`src/guard.js`): IP 레이트리밋 + 동시성 캡 + SSRF(사설IP+쇼핑몰 allowlist) + 관리자 토큰(`HOGU_ADMIN_TOKEN`, 쓰기/딜갱신/기록삭제). QA는 무제한(사설IP만 차단).
 - 데이터 분리: `HOGU_DATA_DIR=./data-prod`(gitignore `data-*/`).
 - **배포=Cloudflare Tunnel**(크롤러가 로컬 크롬 의존 → 서버리스 불가): `npm run start:prod`(=`node start-prod.mjs`, .env.prod 필요) → `cloudflared tunnel --url http://localhost:3390`.
-- **운영자 수동 셋업 체크리스트 = `docs/DEPLOY.md`**(Cloudflare 계정·named tunnel, GitHub 저장소/환경 전략(저장소 분리 비권장), 상시구동, allowlist·rate·history 공개여부, 법무). 런처 `start-{qa,prod}.mjs` + `npm run start:{qa,prod}`.
+- **운영자 수동 셋업 체크리스트 = `docs/ops/DEPLOY.md`**(Cloudflare 계정·named tunnel, GitHub 저장소/환경 전략(저장소 분리 비권장), 상시구동, allowlist·rate·history 공개여부, 법무). 런처 `start-{qa,prod}.mjs` + `npm run start:{qa,prod}`.
 
 ### 저비용 검증 도구 (토큰 절약 — 원본 HTML 안 뽑음)
 ```bash
@@ -64,8 +64,8 @@ hogu-dashboard/
   src/verdict.js         호구지수 스코어링, 이상치 2단계 컷, buildDealPitch(딜+설득)
   src/store.js           data/history.json + data/results/{id}.json
   public/                index.html · app.js · style.css (프런트, vanilla)
-  docs/DESIGN.md         UI 스펙 (팔레트·컴포넌트·반응형)
-  docs/SEARCH-PRECISION.md  유사도 규칙 + 검증 케이스
+  docs/design/DESIGN.md         UI 스펙 (팔레트·컴포넌트·반응형)
+  docs/search/SEARCH-PRECISION.md  유사도 규칙 + 검증 케이스
   tools/                 probe·search-probe·mall-probe·launch-chrome (진단·실행 도구)
   test/                  precision-test.mjs (유사도 회귀 테스트)
   .claude/               skills(token-diet, ui-work) + agents(cheap-probe) + launch.json  (저장소에 포함 — clone 시 따라옴)
@@ -77,7 +77,7 @@ hogu-dashboard/
 
 **가격 소스**: 기본 = 다나와·에누리(HTTP) + 웹(DuckDuckGo). **정밀검색(UI 체크박스, deep=1)** = + SSG·11번가·옥션·G마켓(실제 Chrome, **반드시 순차 실행** — 동시 실행 시 렌더 방해로 0건). 검색당 최대 ~150건.
 
-**유사도 엔진**(`similarity`, 규칙은 SEARCH-PRECISION.md): tok 한글-숫자 분리 → 가중 자카드(STOP 하향) → 모델코드 정규화(다른 모델 0.3캡) → 스펙(용량/크기/oz·ml·L→ml, 같으면 +0.12·다르면 ×0.5) → 변형 키워드(프로/에어/맥스/세대, 한쪽만 ×0.4) → 세대번호(아이폰15 vs 14, 0.3캡) → 부속품 3중 방어(어댑터/필터 등 `it.accessory`로 verdict 비교군 원천 배제).
+**유사도 엔진**(`similarity`, 규칙은 docs/search/SEARCH-PRECISION.md): tok 한글-숫자 분리 → 가중 자카드(STOP 하향) → 모델코드 정규화(다른 모델 0.3캡) → 스펙(용량/크기/oz·ml·L→ml, 같으면 +0.12·다르면 ×0.5) → 변형 키워드(프로/에어/맥스/세대, 한쪽만 ×0.4) → 세대번호(아이폰15 vs 14, 0.3캡) → 부속품 3중 방어(어댑터/필터 등 `it.accessory`로 verdict 비교군 원천 배제).
 
 **호구지수**: 백분위50 + 중앙값프리미엄25 + 최저가과지불20 ± 평점10. 등급 개이득→적정가→조금비쌈→호구주의→호구확정.
 
@@ -93,7 +93,7 @@ hogu-dashboard/
 - **타이포 3중**: Space Grotesk(라틴 디스플레이) + Space Mono(수치/데이터) + Pretendard(한글). `var(--sans)`는 app.js가 참조하므로 이름 유지.
 - **결과 상단 "판정 콕핏"**: 히어로(점수·스티커·미터)+사유+딜을 벤토(flex)로 묶어 한 눈에. ≤1024에서 딜 아래로 랩.
 - 라이트 온리(다크 없음). 반응형 플루이드 우선 + 브레이크 1024/720/520. `?id=` 딥링크.
-- **UI 수정은 `ui-work` 스킬 로드 + `docs/DESIGN.md`만 읽고** (style.css/app.js 전체 읽기 금지).
+- **UI 수정은 `ui-work` 스킬 로드 + `docs/design/DESIGN.md`만 읽고** (style.css/app.js 전체 읽기 금지).
 
 ## 6. 크롤링 불가 목록 (재시도 금지 — 실측 완료)
 - **네이버 쇼핑 직접 크롤링**: 로그인 강제 + 캡차. (API 키는 별개, 가능)

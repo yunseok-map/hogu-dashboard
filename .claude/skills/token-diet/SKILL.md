@@ -41,7 +41,7 @@ hogu-dashboard/
   src/verdict.js       호구지수 스코어링 + 딜 선정
   src/store.js         히스토리 저장
   public/              프런트 (index.html, app.js, style.css)
-  docs/DESIGN.md       UI 스펙 — UI 작업은 ui-work 스킬 로드 후 이것만 읽기
+  docs/design/DESIGN.md       UI 스펙 — UI 작업은 ui-work 스킬 로드 후 이것만 읽기
   tools/               probe.mjs, search-probe.mjs, mall-probe.mjs, launch-chrome.mjs
   test/                precision-test.mjs (유사도 회귀 테스트)
 ```
